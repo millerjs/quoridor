@@ -88,24 +88,29 @@ class Board(object):
         self.N = int(math.sqrt(self._N))
         self._board = _board
 
+    def get_piece_at(self, p):
+        # return '{},{}'.format(p.x, p.y)
+        return ''
+
     def __repr__(self):
         N = self.N
         ret = ''
         for y in range(N):
             for x in range(N):
                 ret += '+'
-                if y < N-1 and not self.are_adjacent(
-                        Position(x, y), Position(x, y+1)):
+                if y > 0 and not self.are_adjacent(
+                        Position(x, y), Position(x, y-1)):
                     ret += '----'
                 else:
                     ret += '    '
             ret += '+\n '
             for x in range(N):
-                if x < N-1 and not self.are_adjacent(
-                        Position(x, y), Position(x+1, y)):
-                    ret += '   |'
+                icon = self.get_piece_at(Position(x, y)).center(4)
+                if x > 0 and not self.are_adjacent(
+                        Position(x, y), Position(x-1, y)):
+                    ret += icon + '|'
                 else:
-                    ret += '    '
+                    ret += icon + ' '
             ret += '\n'
         ret += '+    '*(N+1)
         return ret
@@ -131,8 +136,23 @@ class Board(object):
                 'cannot remove adjacency from itself: {}'.format(p1))
         a = p1.adjacency_location
         b = p2.adjacency_location
+        if not self._board[a][b]:
+            raise InvalidWallError(
+                'positions are already disjoint: {} {}'.format(p1, p2))
         self._board[a][b] = False
         self._board[b][a] = False
+
+    def insert_wall(self, wall):
+        if wall.is_horizontal:
+            p1 = Position(wall.p1.x, wall.p1.y-1)
+            p2 = Position(wall.p2.x, wall.p2.y-1)
+            self.remove_adjacency(p1, wall.p1)
+            self.remove_adjacency(p2, wall.p2)
+        if wall.is_vertical:
+            p1 = Position(wall.p1.x-1, wall.p1.y)
+            p2 = Position(wall.p2.x-1, wall.p2.y)
+            self.remove_adjacency(p1, wall.p1)
+            self.remove_adjacency(p2, wall.p2)
 
 
 class Game(object):
@@ -151,6 +171,9 @@ class Game(object):
                         p2 = Position(xx, yy)
                         self._board[a][p2.adjacency_location] = True
                         self._board[p2.adjacency_location][a] = True
-
-        self.board.remove_adjacency(Position(2, 3), Position(2, 4))
-        self.board.remove_adjacency(Position(4, 4), Position(5, 4))
+        w = Wall(Position(1, 1), Position(1, 2))
+        self.board.insert_wall(w)
+        w = Wall(Position(2, 1), Position(2, 2))
+        self.board.insert_wall(w)
+        w = Wall(Position(1, 1), Position(2, 1))
+        self.board.insert_wall(w)
