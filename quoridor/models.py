@@ -2,7 +2,6 @@ import itertools as itt
 import logging
 import numpy as np
 from scipy import sparse
-import json
 
 DEFAULT_N = 11
 INFINITY = float("inf")
@@ -28,6 +27,12 @@ class Position(object):
             return False
         return True
 
+    def copy(self, direction=None):
+        p = Position(self.x, self.y)
+        if direction:
+            p.shift(direction)
+        return p
+
     def shift(self, direction):
         if direction == 'UP':
             self.y -= 1
@@ -37,6 +42,8 @@ class Position(object):
             self.x -= 1
         elif direction == 'RIGHT':
             self.x += 1
+        else:
+            raise RuntimeError('Unknown direction {}'.format(direction))
         assert (self.x > 0 and self.x < self.N
                 and self.y > 0 and self.y < self.N),\
             'Shift places position out of bounds'
@@ -75,25 +82,6 @@ class Wall(object):
             raise InvalidWallError(
                 '{} and {} are not neighbors'.format(p1, p2))
 
-        # if (p1.x < 1 or p1.y < 1 or p1.x < 1 or p1.x < 1):
-        #     raise InvalidWallError(
-        #         'Wall points x, y must be > 0')
-        # if (p1.x > N-2 or p1.y > N-2 or p1.x > N-2 or p1.x > N-2):
-        #     raise InvalidWallError(
-        #         'Wall points x, y must be < {}'.format(N-2))
-        # if (p1.x <= 1 or p1.x >= N-1) and self.is_vertical:
-        #     raise InvalidWallError(
-        #         '{}.x must be > 1 and < {}'.format(p1, self.N-1))
-        # if (p2.x <= 1 or p2.x >= N-1) and self.is_vertical:
-        #     raise InvalidWallError(
-        #         '{}.x must be > 1 and < {}'.format(p2, self.N-1))
-        # if (p1.y <= 1 or p1.y >= N-1) and self.is_horizontal:
-        #     raise InvalidWallError(
-        #         '{}.y must be > 1 and < {}'.format(p1, self.N-1))
-        # if (p2.y <= 1 or p2.y >= N-1) and self.is_horizontal:
-        #     raise InvalidWallError(
-        #         '{}.y must be > 1 and < {}'.format(p2, self.N-1))
-
     @property
     def is_horizontal(self):
         return self.p1.y == self.p2.y
@@ -103,7 +91,7 @@ class Wall(object):
         return self.p1.x == self.p2.x
 
     def __repr__(self):
-        return 'Wall({}->{})'.format(self.p1, self.p2)
+        return '{}({}->{})'.format(self.__class__.__name__, self.p1, self.p2)
 
 
 class VerticalWall(Wall):
@@ -111,16 +99,22 @@ class VerticalWall(Wall):
     def __init__(self, p, N=DEFAULT_N):
         assert p.x > 1 and p.x < N-1,\
             '{}.x must be between 1 and {}'.format(p, N-1)
-        p2 = Position(p.x, p.y).shift('DOWN')
-        super(VerticalWall, self).__init__(p, p2, N)
+        super(VerticalWall, self).__init__(p, p.copy('DOWN'), N)
+
+    def add_to_board(self, board):
+        board.remove_adjacency(self.p1.copy('LEFT'), self.p1)
+        board.remove_adjacency(self.p2.copy('LEFT'), self.p2)
 
 
 class HorizontalWall(Wall):
     def __init__(self, p, N=DEFAULT_N):
         assert p.y > 1 and p.y < N-1,\
             '{}.x must be between 1 and {}'.format(p, N-1)
-        p2 = Position(p.x, p.y).shift('RIGHT')
-        super(HorizontalWall, self).__init__(p, p2, N)
+        super(HorizontalWall, self).__init__(p, p.copy('RIGHT'), N)
+
+    def add_to_board(self, board):
+        board.remove_adjacency(self.p1.copy('UP'), self.p1)
+        board.remove_adjacency(self.p2.copy('UP'), self.p2)
 
 
 class Board(object):
@@ -169,21 +163,12 @@ class Board(object):
         return ret
 
     def are_adjacent(self, p1, p2):
-        a = p1.adjacency_location
-        b = p2.adjacency_location
-        return self._board[a, b] != INFINITY
-
-    def dump_adjacency_matrix(self):
-        for x in self._board:
-            for y in x:
-                print ('#' if y else '.'),
-            print ''
+        a, b = p1.adjacency_location, p2.adjacency_location
+        return (self._board[a, b] != INFINITY)
 
     def remove_adjacency(self, p1, p2):
-        if p1 == p2:
-            raise InvalidWallError(
-                'cannot remove adjacency from itself: {}'.format(p1))
         log.debug('removing adjacency between {}, {}'.format(p1, p2))
+        print p1, p2
         a = p1.adjacency_location
         b = p2.adjacency_location
         if not self._board[a, b]:
@@ -199,26 +184,11 @@ class Board(object):
         return True
 
     def insert_wall(self, wall):
-        if not self.are_adjacent(wall.p1, wall.p2):
-            raise InvalidWallError('Wall not valid {}, {}'.format(
-                wall.p1, wall.p2))
         test = self.copy()
-        # Add wall on test board
-        if wall.is_horizontal:
-            test.remove_adjacency(Position(wall.p1.x, wall.p1.y-1), wall.p1)
-            test.remove_adjacency(Position(wall.p2.x, wall.p2.y-1), wall.p2)
-        elif wall.is_vertical:
-            test.remove_adjacency(Position(wall.p1.x-1, wall.p1.y), wall.p1)
-            test.remove_adjacency(Position(wall.p2.x-1, wall.p2.y), wall.p2)
+        wall.add_to_board(test)
         test.players_have_paths()
-
         log.info('Inserting wall {}'.format(wall))
-        if wall.is_horizontal:
-            self.remove_adjacency(Position(wall.p1.x, wall.p1.y-1), wall.p1)
-            self.remove_adjacency(Position(wall.p2.x, wall.p2.y-1), wall.p2)
-        elif wall.is_vertical:
-            self.remove_adjacency(Position(wall.p1.x-1, wall.p1.y), wall.p1)
-            self.remove_adjacency(Position(wall.p2.x-1, wall.p2.y), wall.p2)
+        wall.add_to_board(self)
 
     def is_empty(self, p):
         return p not in [a.pos for a in self.players]
@@ -237,14 +207,11 @@ class Board(object):
 class Player(object):
 
     def __init__(self, name):
-        assert name is not None
+        self.game, self.board, self.pos, self.direction = [None]*4
+        assert name is not None, 'Player must have a name'
         self.name = name
-        self.game = None
-        self.board = None
-        self.pos = None
         self.win_positions = []
         self.walls = 0
-        self.direction = None
 
     def __repr__(self):
         return '<Player({})>'.format(self.name)
@@ -281,16 +248,14 @@ class Player(object):
     def move(self, direction, jump=None):
         self.asserts_before_turn()
         self.assert_valid_direction(direction)
-        move_p = Position(self.pos.x, self.pos.y)
-        move_p.shift(direction)
+        move_p = self.pos.copy(direction)
         assert self.board.are_adjacent(self.pos, move_p),\
             'move: Positions are not adjacent: {}, {}'.format(
                 self.pos, move_p)
         if self.board.is_empty(move_p):
             self.pos = move_p
         else:
-            jump_p = Position(move_p.x, move_p.y)
-            jump_p.shift(direction)
+            jump_p = move_p.copy(direction)
             if self.board.are_adjacent(move_p, jump_p):
                 assert not jump or direction == jump,\
                     'Attempt to corner jump when straight jump possible'
@@ -299,8 +264,7 @@ class Player(object):
                 assert jump,\
                     'Straight jump not possible, specify jump direction'
                 self.assert_valid_direction(jump)
-                jump_p = Position(move_p.x, move_p.y)
-                jump_p.shift(jump)
+                jump_p = move_p.copy(jump)
                 assert self.board.are_adjacent(move_p, jump_p),\
                     'Specified corner jump not valid'
                 self.pos = jump_p
