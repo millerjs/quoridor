@@ -2,6 +2,8 @@ import itertools as itt
 import logging
 import numpy as np
 from scipy import sparse
+import string
+import random
 
 DEFAULT_N = 11
 INFINITY = float("inf")
@@ -52,11 +54,6 @@ class Position(object):
     @property
     def adjacency_location(self):
         return self.N*self.x + self.y
-
-    def from_adjacency_location(self, loc):
-        self.x = loc % self.N
-        self.y = loc / self.N
-        return self
 
     def __repr__(self):
         return '<Position({}, {})>'.format(self.x, self.y)
@@ -168,9 +165,7 @@ class Board(object):
 
     def remove_adjacency(self, p1, p2):
         log.debug('removing adjacency between {}, {}'.format(p1, p2))
-        print p1, p2
-        a = p1.adjacency_location
-        b = p2.adjacency_location
+        a, b = p1.adjacency_location, p2.adjacency_location
         if not self._board[a, b]:
             raise InvalidWallError(
                 'positions are already disjoint: {} {}'.format(p1, p2))
@@ -206,9 +201,10 @@ class Board(object):
 
 class Player(object):
 
-    def __init__(self, name):
+    def __init__(self, name, description=None):
         self.game, self.board, self.pos, self.direction = [None]*4
         assert name is not None, 'Player must have a name'
+        self.description = description
         self.name = name
         self.win_positions = []
         self.walls = 0
@@ -276,8 +272,11 @@ class Player(object):
 
 class Game(object):
 
-    def __init__(self, N=DEFAULT_N):
+    def __init__(self, description='', N=DEFAULT_N):
+        self.game_id = ''.join(random.choice(
+            string.ascii_lowercase + string.digits) for _ in range(5))
         self.started = False
+        self.description = description
         self._board = np.zeros((N*N, N*N))
         self._board.fill(INFINITY)
         self._board = sparse.lil_matrix(self._board)
@@ -292,6 +291,11 @@ class Game(object):
             ('RIGHT', Position(1, N/2), [Position(x, N-1) for x in range(N)]),
             ('LEFT', Position(N-2, N/2), [Position(x, N-1) for x in range(N)]),
         ]
+
+    def get_player(self, name):
+        assert Player(name) in self.players,\
+            'No player named {}'.format(name)
+        return [p for p in self.players if p.name == name][0]
 
     def to_json(self):
         return {
