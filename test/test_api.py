@@ -31,21 +31,21 @@ def post(route, data={}, **kwargs):
 class TestQuoridorAPI(unittest.TestCase):
 
     def test_game_creation(self):
-        print post('/game/new', description='test game')['id']
+        print post('/game', description='test game')['id']
 
     def test_player_register(self):
-        game = post('/game/new')['id']
+        game = post('/game')['id']
         print post('/game/{}/register'.format(game),
                    name='User1', description='basically deep blue')
 
     def test_repeated_player_register(self):
-        game = post('/game/new')['id']
+        game = post('/game')['id']
         print post('/game/{}/register'.format(game), {'name': 'A'})
         with self.assertRaises(Exception):
             print post('/game/{}/register'.format(game), {'name': 'A'})
 
     def test_simple_game(self):
-        game = post('/game/new')['id']
+        game = post('/game')['id']
         post('/game/{}/register'.format(game), {'name': 'A'})
         post('/game/{}/register'.format(game), {'name': 'B'})
         post('/game/{}/start'.format(game))

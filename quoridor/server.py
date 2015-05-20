@@ -30,7 +30,7 @@ def try_action(func):
     return action
 
 
-@app.route('/game/new', methods=['POST'])
+@app.route('/game', methods=['POST'])
 def new_game():
     """Creates a new game.
 
@@ -38,7 +38,7 @@ def new_game():
 
     .. sourcecode:: http
 
-       POST /game/new?description=a+boring+match HTTP/1.1
+       POST /game HTTP/1.1
        Content-Type: application/json
 
     **Example response**:
@@ -72,7 +72,7 @@ def new_game():
 
 
 @try_action
-@app.route('/game/<game_id>/register', methods=['POST'])
+@app.route('/games/<game_id>/register', methods=['POST'])
 def register(game_id):
     """Register a user to game `game_id`.
 
