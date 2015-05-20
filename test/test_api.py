@@ -16,7 +16,10 @@ def get(route):
     r = requests.get(url.format(route))
     print r.text
     r.raise_for_status()
-    return r.json()
+    try:
+        return r.json()
+    except:
+        return r.text
 
 
 def post(route, data={}, **kwargs):
@@ -25,7 +28,10 @@ def post(route, data={}, **kwargs):
                       headers={'Content-Type': 'application/json'})
     print r.text
     r.raise_for_status()
-    return r.json()
+    try:
+        return r.json()
+    except:
+        return r.text
 
 
 class TestQuoridorAPI(unittest.TestCase):
@@ -37,6 +43,19 @@ class TestQuoridorAPI(unittest.TestCase):
         game = post('/game')['id']
         print post('/game/{}/register'.format(game),
                    name='User1', description='basically deep blue')
+
+    def test_get_state(self):
+        game = post('/game')['id']
+        post('/game/{}/register'.format(game), name='A')
+        post('/game/{}/register'.format(game), name='B')
+        post('/game/{}/start'.format(game))
+        print get('/game/{}/state'.format(game))
+
+    def test_ascii(self):
+        game = post('/game')['id']
+        post('/game/{}/register'.format(game), name='A')
+        post('/game/{}/register'.format(game), name='B')
+        print get('/game/{}/ascii'.format(game))
 
     def test_repeated_player_register(self):
         game = post('/game')['id']

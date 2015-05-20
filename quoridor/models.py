@@ -291,6 +291,10 @@ class Game(object):
             ('RIGHT', Position(1, N/2), [Position(x, N-1) for x in range(N)]),
             ('LEFT', Position(N-2, N/2), [Position(x, N-1) for x in range(N)]),
         ]
+        log.info('New game: {}'.format(self))
+
+    def __repr__(self):
+        return '<Game({})>'.format(self.game_id)
 
     def get_player(self, name):
         assert Player(name) in self.players,\
@@ -299,7 +303,7 @@ class Game(object):
 
     def to_json(self):
         return {
-            'ascii': str(self.board),
+            'started': self.started,
             'players': {
                 p.name: {
                     'walls': p.walls,
@@ -316,9 +320,13 @@ class Game(object):
                 for row in self._board.toarray()]
 
     def start(self):
-        log.info('Starting game with players: {}'.format(self.players))
+        assert not self.started,\
+            '{} already started'.format(self)
+        assert len(self.players),\
+            'No players: {}'.format(self)
         assert len(self.players) % 2 == 0,\
             'Uneven number of players: {}'.format(self.players)
+        log.info('Starting game with players: {}'.format(self.players))
         for player in self.players:
             player.walls = 20/len(self.players)
         self.started = True
