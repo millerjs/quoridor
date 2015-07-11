@@ -1,15 +1,26 @@
+from collections import defaultdict
+from scipy import sparse
 import itertools as itt
 import logging
 import numpy as np
-from scipy import sparse
-import string
 import random
+import string
+import sqlalchemy as sa
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import orm
 
 DEFAULT_N = 11
-INFINITY = float("inf")
+INF = float("inf")
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger('quoridor')
+
+Base = declarative_base()
+
+
+def get_new_id():
+    return ''.join(random.choice(
+        string.ascii_lowercase + string.digits) for _ in range(4))
 
 
 class InvalidWallError(Exception):
@@ -19,8 +30,8 @@ class InvalidWallError(Exception):
 class Position(object):
     def __init__(self, x=0, y=0, N=DEFAULT_N):
         self.x, self.y, self.N = x, y, N
-        if self.x < 0 or self.x >= N or self.y < 0 or self.y >= N:
-            raise ValueError('Position out of bounds: ({}, {})'.format(x, y))
+        assert x >= 0 and x < N and y >= 0 and y < N,\
+            'Position out of bounds: ({}, {})'.format(x, y)
 
     def is_neighbor_to(self, other):
         if abs(self.x - other.x) > 1:
@@ -114,7 +125,10 @@ class HorizontalWall(Wall):
         board.remove_adjacency(self.p2.copy('UP'), self.p2)
 
 
-class Board(object):
+class Board(Base):
+
+    __tablename__ = 'boards'
+    board_id = sa.Column(sa.Integer, primary_key=True)
 
     def __init__(self, _board, N=DEFAULT_N):
         self.N = N
@@ -161,7 +175,7 @@ class Board(object):
 
     def are_adjacent(self, p1, p2):
         a, b = p1.adjacency_location, p2.adjacency_location
-        return (self._board[a, b] != INFINITY)
+        return (self._board[a, b] != INF)
 
     def remove_adjacency(self, p1, p2):
         log.debug('removing adjacency between {}, {}'.format(p1, p2))
@@ -169,8 +183,8 @@ class Board(object):
         if not self._board[a, b]:
             raise InvalidWallError(
                 'positions are already disjoint: {} {}'.format(p1, p2))
-        self._board[a, b] = INFINITY
-        self._board[b, a] = INFINITY
+        self._board[a, b] = INF
+        self._board[b, a] = INF
 
     def players_have_paths(self):
         for p in self.players:
@@ -194,16 +208,48 @@ class Board(object):
         dist = sparse.csgraph.floyd_warshall(dist)
         for dest in destinations:
             d = dist[position.adjacency_location, dest.adjacency_location]
-            if d < INFINITY:
+            if d < INF:
                 return True
         return False
 
+    def iter_points_and_neighbors(self, start=0, end=0):
+        N = self.N
+        if not end:
+            end = N
+        for y in range(start, end):
+            for x in range(start, end):
+                for xx, yy in [(-1, 0), (0, -1), (1, 0), (0, 1)]:
+                    if x+xx < start or x+xx >= end or\
+                       y+yy < start or y+yy >= end:
+                        continue
+                    yield x, y, xx, yy
 
-class Player(object):
+    def to_graph(self):
+        graph = defaultdict(list)
+        for x, y, xx, yy in self.iter_points_and_neighbors():
+            if self.are_adjacent(Position(x, y), Position(x+xx, y+yy)):
+                graph[(x, y)].append((x+xx, y+yy))
+        return graph
+
+    def list_walls(self):
+        graph = []
+        for x, y, xx, yy in self.iter_points_and_neighbors(1, self.N-1):
+            if not self.are_adjacent(Position(x, y), Position(x+xx, y+yy)):
+                graph.append(
+                    [[x, y], [x+xx, y+yy]]
+                )
+        return graph
+
+
+class Player(Base):
+
+    __tablename__ = 'players'
+    player_id = sa.Column(sa.Text, primary_key=True)
 
     def __init__(self, name, description=None):
         self.game, self.board, self.pos, self.direction = [None]*4
         assert name is not None, 'Player must have a name'
+        self.player_id = get_new_id()
         self.description = description
         self.name = name
         self.win_positions = []
@@ -213,7 +259,7 @@ class Player(object):
         return '<Player({})>'.format(self.name)
 
     def __eq__(self, other):
-        return self.name == other.name
+        return self.player_id == other.player_id
 
     def __ne__(self, other):
         return not self == other
@@ -270,15 +316,17 @@ class Player(object):
         return self.board.has_path_to(self.pos, self.win_positions)
 
 
-class Game(object):
+class Game(Base):
+
+    __tablename__ = 'games'
+    game_id = sa.Column(sa.Text, primary_key=True)
 
     def __init__(self, description='', N=DEFAULT_N):
-        self.game_id = ''.join(random.choice(
-            string.ascii_lowercase + string.digits) for _ in range(5))
+        self.game_id = get_new_id()
         self.started = False
         self.description = description
         self._board = np.zeros((N*N, N*N))
-        self._board.fill(INFINITY)
+        self._board.fill(INF)
         self._board = sparse.lil_matrix(self._board)
         self.board = Board(self._board)
         self.setup_board()
@@ -296,10 +344,10 @@ class Game(object):
     def __repr__(self):
         return '<Game({})>'.format(self.game_id)
 
-    def get_player(self, name):
-        assert Player(name) in self.players,\
-            'No player named {}'.format(name)
-        return [p for p in self.players if p.name == name][0]
+    def get_player(self, pid):
+        assert pid in [p.player_id for p in self.players],\
+            'No player: {}'.format(pid)
+        return [p for p in self.players if p.player_id == pid][0]
 
     def to_json(self):
         return {
@@ -316,7 +364,7 @@ class Game(object):
 
     @property
     def adjacency_matrix(self):
-        return [[0 if n == INFINITY else 1 for n in row]
+        return [[0 if n == INF else 1 for n in row]
                 for row in self._board.toarray()]
 
     def start(self):
@@ -339,7 +387,7 @@ class Game(object):
         for player in players:
             assert len(self.players) < 4,\
                 'too many players: {} + {}'.format(self.players, player)
-            assert player not in self.players,\
+            assert player.name not in [p.name for p in self.players],\
                 'player already registered: {}'.format(player)
             self.players.append(player)
             player.game = self
@@ -376,18 +424,14 @@ class Game(object):
 
     def setup_board(self):
         assert not self.started, 'Game already started!'
-        N = self.board.N
-        for y in range(N):
-            for x in range(N):
-                p1 = Position(x, y)
-                a = p1.adjacency_location
-                for xx, yy in [(-1, 0), (0, -1), (1, 0), (0, 1)]:
-                    if x+xx < 0 or x+xx >= N or y+yy < 0 or y+yy >= N:
-                        continue
-                    b = Position(x+xx, y+yy).adjacency_location
-                    self._board[a, b] = 1
-                    self._board[b, a] = 1
+        for x, y, xx, yy in self.board.iter_points_and_neighbors():
+            p1 = Position(x, y)
+            a = p1.adjacency_location
+            b = Position(x+xx, y+yy).adjacency_location
+            self._board[a, b] = 1
+            self._board[b, a] = 1
 
+        N = self.board.N
         for i in range(N-1):
             self.board.remove_adjacency(Position(i, 0), Position(i+1, 0))
             self.board.remove_adjacency(Position(i, N-1), Position(i+1, N-1))

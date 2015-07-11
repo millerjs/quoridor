@@ -6,10 +6,23 @@ from functools import wraps
 from models import Game, Player, VerticalWall, HorizontalWall, Position
 import json
 import os
+import logging
+import traceback
 
 
 app = Flask(__name__, static_url_path='')
 games = {}
+log = logging.getLogger('server')
+
+
+def get_game(game_id):
+    assert game_id in games,\
+        'Game {} not found'.format(game_id)
+    return games[game_id]
+
+
+def save_game(game):
+    games[game.game_id] = game
 
 
 def make_json_error(ex):
@@ -27,7 +40,8 @@ def try_action(func):
     def action(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except Exception as msg:
+        except AssertionError as msg:
+            log.error('{}: {}'.format(msg.__class__.__name__, msg))
             abort(400, description=msg)
     return action
 
@@ -74,15 +88,15 @@ def new_game():
     data = request.get_json()
     descrip = data.get('description', '')
     game = Game(description=descrip)
-    games[game.game_id] = game
+    save_game(game)
     return jsonify({
         'msg': 'Registered new game!',
         'id': game.game_id
     }), 201
 
 
-@try_action
 @app.route('/game/<game_id>/register', methods=['POST'])
+@try_action
 def register(game_id):
     """Register a player to game `game_id`.
 
@@ -124,27 +138,31 @@ def register(game_id):
     data = request.get_json()
     descrip = data.get('description', '')
     name = data['name']
-    game = games[game_id]
+    game = get_game(game_id)
     descrip = request.args.get('description', None)
     p = Player(name, descrip)
     game.register(p)
-    return jsonify({'msg': 'Registered {}!'.format(p.name)}), 201
+    return jsonify({
+        'msg': 'Registered {}!'.format(p.name),
+        'player_id': p.player_id,
+    }), 201
 
 
-@try_action
 @app.route('/game/<game_id>/start', methods=['POST'])
+@try_action
 def start(game_id):
     """
 
     start the game. nothing more, nothing less.
 
     """
-    games[game_id].start()
+    game = get_game(game_id)
+    game.start()
     return jsonify(msg='GAME {} HAS STARTED!!!!'.format(game_id))
 
 
-@try_action
 @app.route('/game/<game_id>/state', methods=['GET'])
+@try_action
 def state(game_id):
     """Get the game state
 
@@ -179,8 +197,8 @@ def state(game_id):
     return jsonify(games[game_id].to_json())
 
 
-@try_action
 @app.route('/game/<game_id>/ascii', methods=['GET'])
+@try_action
 def get_board(game_id):
     """Get ascii rep of the game.
 
@@ -192,18 +210,57 @@ def get_board(game_id):
        Content-Type: text/plain
 
     """
-    return Response(str(games[game_id].board), mimetype='text/plain')
+    game = get_game(game_id)
+    return Response(str(game.board), mimetype='text/plain')
 
 
+@app.route('/game/<game_id>/<player_id>/move/<direction>', methods=['POST'])
+@app.route('/game/<game_id>/<player_id>/move/<direction>/<jump>', methods=['POST'])
 @try_action
-@app.route('/game/<game_id>/<player>/move', methods=['POST'])
-def move(game_id, player):
+def move(game_id, player_id, direction, jump=None):
     """
     """
-    direction, jump = request.args['direction'], request.args.get('jump', None)
-    games[game_id].get_player(player).move(direction, jump)
-    return jsonify(msg='Player {} moved {}'.format(player, direction))
+    direction = direction.upper()
+    jump = None if not jump else jump.upper()
+    assert direction in ['RIGHT', 'UP', 'LEFT', 'DOWN'],\
+        'Invalid move direction {}'.format(direction)
+    game = get_game(game_id)
+    player = game.get_player(player_id)
+    old_pos = player.pos
+    player.move(direction, jump)
+    return jsonify({
+        'msg': '{} moved {}'.format(player.name, direction),
+        'old_position': {
+            'x': old_pos.x,
+            'y': old_pos.y,
+        },
+        'new_position': {
+            'x': player.pos.x,
+            'y': player.pos.y,
+        }
+    })
 
+
+@app.route('/game/<game_id>/<player_id>/wall/<direction>/<int:x>/<int:y>',
+           methods=['POST'])
+@try_action
+def place_wall(game_id, player_id, direction, x, y):
+    """
+    """
+    direction = direction.upper()
+    assert direction in ['VERTICAL', 'HORIZONTAL'],\
+        'Invalid wall orientation {}, try, vertical or horizontal'.format(
+            direction)
+    game = get_game(game_id)
+    player = game.get_player(player_id)
+    wall = {
+        'VERTICAL': VerticalWall,
+        'HORIZONTAL': HorizontalWall,
+    }[direction](Position(x, y))
+    player.place_wall(wall)
+    return jsonify({
+        'msg': '{} placed a wall {}'.format(player.name, direction),
+    })
 
 if __name__ == '__main__':
-    app.run(port=80, debug=True)
+    app.run(port=8000, debug=True)

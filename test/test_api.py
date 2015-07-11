@@ -9,7 +9,7 @@ import requests
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-url = 'http://localhost{}'
+url = 'http://localhost:8000{}'
 
 
 def get(route):
@@ -65,14 +65,43 @@ class TestQuoridorAPI(unittest.TestCase):
 
     def test_simple_game(self):
         game = post('/game')['id']
-        post('/game/{}/register'.format(game), {'name': 'A'})
-        post('/game/{}/register'.format(game), {'name': 'B'})
+        a = post('/game/{}/register'.format(game), {'name': 'A'})['player_id']
+        b = post('/game/{}/register'.format(game), {'name': 'B'})['player_id']
         post('/game/{}/start'.format(game))
-        post('/game/{}/{}/move'.format(game, 'A'), {'direction': 'DOWN'})
+        post('/game/{}/{}/move/{}'.format(game, a, 'DOWN'))
         get('/game/{}/state'.format(game))
-        with self.assertRaises(Exception):
-            post('/game/{}/{}/move'.format(game, 'A'), {'direction': 'DOWN'})
         for i in range(7):
-            post('/game/{}/{}/move'.format(game, 'B'), {'direction': 'UP'})
-            post('/game/{}/{}/move'.format(game, 'A'), {'direction': 'DOWN'})
-        print get('/game/{}/ascii'.format(game))['msg']
+            post('/game/{}/{}/move/{}'.format(game, b, 'UP'))
+            post('/game/{}/{}/move/{}'.format(game, a, 'DOWN'))
+        print get('/game/{}/ascii'.format(game))
+        with self.assertRaises(Exception):
+            post('/game/{}/{}/move/{}'.format(game, a, 'DOWN'))
+        print get('/game/{}/ascii'.format(game))
+
+    def test_jump_straight(self):
+        game = post('/game')['id']
+        a = post('/game/{}/register'.format(game), {'name': 'A'})['player_id']
+        b = post('/game/{}/register'.format(game), {'name': 'B'})['player_id']
+        post('/game/{}/start'.format(game))
+        for i in range(3):
+            post('/game/{}/{}/move/{}'.format(game, a, 'DOWN'))
+            post('/game/{}/{}/move/{}'.format(game, b, 'UP'))
+        post('/game/{}/{}/move/{}'.format(game, a, 'DOWN'))
+        post('/game/{}/{}/move/{}'.format(game, b, 'UP'))
+        print get('/game/{}/ascii'.format(game))
+        print get('/game/{}/state'.format(game))
+
+    def test_place_wall(self):
+        game = post('/game')['id']
+        a = post('/game/{}/register'.format(game), {'name': 'A'})['player_id']
+        b = post('/game/{}/register'.format(game), {'name': 'B'})['player_id']
+        post('/game/{}/start'.format(game))
+        post('/game/{}/{}/wall/horizontal/5/5'.format(game, a))
+        for i in range(3):
+            post('/game/{}/{}/move/{}'.format(game, b, 'UP'))
+            post('/game/{}/{}/move/{}'.format(game, a, 'DOWN'))
+        post('/game/{}/{}/move/{}'.format(game, b, 'UP'))
+        with self.assertRaises(Exception):
+            post('/game/{}/{}/move/{}'.format(game, a, 'DOWN'))
+        post('/game/{}/{}/move/{}'.format(game, a, 'LEFT'))
+        print get('/game/{}/ascii'.format(game))
