@@ -16,23 +16,24 @@ use hyper::server::Response;
 use hyper::net::Fresh;
 
 // Util libraries
-extern crate getopts;
-use getopts::Options;
+#[macro_use]
+extern crate log;
+extern crate env_logger;
 
 
 fn hello(_: Request, res: Response<Fresh>) {
     res.send(b"Hello World!").unwrap();
 }
 
-fn main() {
 
+fn main() {
+    env_logger::init().unwrap();
     let args: Vec<String> = env::args().collect();
 
-    // Prints each argument on a separate line
-    for argument in env::args() {
-        println!("{}", argument);
+    if args.len() < 1 {
+        return error!("Missing required argument 'server': <host:port>")
     }
 
-    // Server::http("127.0.0.1:3000").unwrap().handle(hello);
+    Server::http(&*args[1].to_string()).unwrap().handle(hello);
 
 }
