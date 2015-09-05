@@ -7,7 +7,6 @@ from models import Game, Player, VerticalWall, HorizontalWall, Position
 import json
 import os
 import logging
-import traceback
 
 
 app = Flask(__name__, static_url_path='')

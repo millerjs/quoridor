@@ -5,9 +5,6 @@ import logging
 import numpy as np
 import random
 import string
-import sqlalchemy as sa
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import orm
 
 DEFAULT_N = 11
 INF = float("inf")
@@ -15,7 +12,7 @@ INF = float("inf")
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger('quoridor')
 
-Base = declarative_base()
+Base = object
 
 
 def get_new_id():
@@ -28,7 +25,7 @@ class InvalidWallError(Exception):
 
 
 class Position(object):
-    def __init__(self, x=0, y=0, N=DEFAULT_N):
+    def __init__(self, x, y, N=DEFAULT_N):
         self.x, self.y, self.N = x, y, N
         assert x >= 0 and x < N and y >= 0 and y < N,\
             'Position out of bounds: ({}, {})'.format(x, y)
@@ -125,126 +122,9 @@ class HorizontalWall(Wall):
         board.remove_adjacency(self.p2.copy('UP'), self.p2)
 
 
-class Board(Base):
-
-    __tablename__ = 'boards'
-    board_id = sa.Column(sa.Integer, primary_key=True)
-
-    def __init__(self, _board, N=DEFAULT_N):
-        self.N = N
-        self._board = _board
-        self.players = []
-
-    def get_piece_at(self, p):
-        for player in self.players:
-            if player.pos == p:
-                return player.name[:3]
-        return ''
-
-    def copy(self):
-        b = Board(_board=sparse.lil_matrix(self._board, copy=True))
-        b.players = self.players
-        return b
-
-    def __repr__(self):
-        N = self.N
-        ret = ''
-        for y in range(N):
-            for x in range(N):
-                ret += '+'
-                if y == 1 or y == N-1:
-                    ret += '----'
-                elif y > 0 and not self.are_adjacent(
-                        Position(x, y), Position(x, y-1)):
-                    ret += '####'
-                else:
-                    ret += '    '
-            ret += '+\n '
-            for x in range(N):
-                icon = self.get_piece_at(Position(x, y)).center(4)
-                if x == 0 or x == N-2:
-                    ret += icon + '|'
-                elif x < N-1 and not self.are_adjacent(
-                        Position(x, y), Position(x+1, y)):
-                    ret += icon + '#'
-                else:
-                    ret += icon + ' '
-            ret += '\n'
-        ret += '+    '*(N+1)
-        return ret
-
-    def are_adjacent(self, p1, p2):
-        a, b = p1.adjacency_location, p2.adjacency_location
-        return (self._board[a, b] != INF)
-
-    def remove_adjacency(self, p1, p2):
-        log.debug('removing adjacency between {}, {}'.format(p1, p2))
-        a, b = p1.adjacency_location, p2.adjacency_location
-        if not self._board[a, b]:
-            raise InvalidWallError(
-                'positions are already disjoint: {} {}'.format(p1, p2))
-        self._board[a, b] = INF
-        self._board[b, a] = INF
-
-    def players_have_paths(self):
-        for p in self.players:
-            assert self.has_path_to(p.pos, p.win_positions),\
-                '{} has no path to win positions'.format(p)
-        return True
-
-    def insert_wall(self, wall):
-        test = self.copy()
-        wall.add_to_board(test)
-        test.players_have_paths()
-        log.info('Inserting wall {}'.format(wall))
-        wall.add_to_board(self)
-
-    def is_empty(self, p):
-        return p not in [a.pos for a in self.players]
-
-    def has_path_to(self, position, destinations, board=None):
-        """thanks be to floyd"""
-        dist = sparse.lil_matrix(board or self._board, copy=True)
-        dist = sparse.csgraph.floyd_warshall(dist)
-        for dest in destinations:
-            d = dist[position.adjacency_location, dest.adjacency_location]
-            if d < INF:
-                return True
-        return False
-
-    def iter_points_and_neighbors(self, start=0, end=0):
-        N = self.N
-        if not end:
-            end = N
-        for y in range(start, end):
-            for x in range(start, end):
-                for xx, yy in [(-1, 0), (0, -1), (1, 0), (0, 1)]:
-                    if x+xx < start or x+xx >= end or\
-                       y+yy < start or y+yy >= end:
-                        continue
-                    yield x, y, xx, yy
-
-    def to_graph(self):
-        graph = defaultdict(list)
-        for x, y, xx, yy in self.iter_points_and_neighbors():
-            if self.are_adjacent(Position(x, y), Position(x+xx, y+yy)):
-                graph[(x, y)].append((x+xx, y+yy))
-        return graph
-
-    def list_walls(self):
-        graph = []
-        for x, y, xx, yy in self.iter_points_and_neighbors(1, self.N-1):
-            if not self.are_adjacent(Position(x, y), Position(x+xx, y+yy)):
-                graph.append(
-                    [[x, y], [x+xx, y+yy]]
-                )
-        return graph
-
-
 class Player(Base):
 
     __tablename__ = 'players'
-    player_id = sa.Column(sa.Text, primary_key=True)
 
     def __init__(self, name, description=None):
         self.game, self.board, self.pos, self.direction = [None]*4
@@ -316,10 +196,121 @@ class Player(Base):
         return self.board.has_path_to(self.pos, self.win_positions)
 
 
+class Board(Base):
+
+    __tablename__ = 'boards'
+
+    def __init__(self, _board=None, N=DEFAULT_N):
+        self.N = N
+        self._board = _board
+        self.players = []
+        self.walls = []
+
+    def get_piece_at(self, p):
+        for player in self.players:
+            if player.pos == p:
+                return player.name[:3]
+        return ''
+
+    def copy(self):
+        b = Board(_board=sparse.lil_matrix(self._board, copy=True))
+        b.players = self.players
+        return b
+
+    def __repr__(self):
+        N = self.N
+        ret = ''
+        for y in range(N):
+            for x in range(N):
+                ret += '+'
+                if y == 1 or y == N-1:
+                    ret += '----'
+                elif y > 0 and not self.are_adjacent(
+                        Position(x, y), Position(x, y-1)):
+                    ret += '####'
+                else:
+                    ret += '    '
+            ret += '+\n '
+            for x in range(N):
+                icon = self.get_piece_at(Position(x, y)).center(4)
+                if x == 0 or x == N-2:
+                    ret += icon + '|'
+                elif x < N-1 and not self.are_adjacent(
+                        Position(x, y), Position(x+1, y)):
+                    ret += icon + '#'
+                else:
+                    ret += icon + ' '
+            ret += '\n'
+        ret += '+    '*(N+1)
+        return ret
+
+    def are_adjacent(self, p1, p2):
+        a, b = p1.adjacency_location, p2.adjacency_location
+        return (self._board[a, b] != INF)
+
+    def remove_adjacency(self, p1, p2):
+        log.debug('removing adjacency between {}, {}'.format(p1, p2))
+        if not self.are_adjacent(p1, p2):
+            raise InvalidWallError(
+                'positions are already disjoint: {} {}'.format(p1, p2))
+        a, b = p1.adjacency_location, p2.adjacency_location
+        self._board[a, b] = INF
+        self._board[b, a] = INF
+
+    def players_have_paths(self):
+        for p in self.players:
+            assert self.has_path_to(p.pos, p.win_positions),\
+                '{} has no path to win positions'.format(p)
+        return True
+
+    def insert_wall(self, wall):
+        test = self.copy()
+        print wall
+        wall.add_to_board(test)
+        test.players_have_paths()
+        log.info('Inserting wall {}'.format(wall))
+        wall.add_to_board(self)
+        self.walls.append(wall)
+
+    def is_empty(self, p):
+        return p not in [a.pos for a in self.players]
+
+    def has_path_to(self, position, destinations, board=None):
+        """thanks be to floyd"""
+        dist = sparse.lil_matrix(board or self._board, copy=True)
+        dist = sparse.csgraph.floyd_warshall(dist)
+        for dest in destinations:
+            d = dist[position.adjacency_location, dest.adjacency_location]
+            if d < INF:
+                return True
+        return False
+
+    def iter_points_and_neighbors(self, start=0, end=0):
+        N = self.N
+        if not end:
+            end = N
+        for y in range(start, end):
+            for x in range(start, end):
+                for xx, yy in [(-1, 0), (0, -1), (1, 0), (0, 1)]:
+                    if x+xx < start or x+xx >= end or\
+                       y+yy < start or y+yy >= end:
+                        continue
+                    yield x, y, xx, yy
+
+    def to_graph(self):
+        graph = defaultdict(list)
+        for x, y, xx, yy in self.iter_points_and_neighbors():
+            if self.are_adjacent(Position(x, y), Position(x+xx, y+yy)):
+                graph[(x, y)].append((x+xx, y+yy))
+        return graph
+
+    def list_walls(self):
+        return [[[w.p1.x, w.p1.y], [w.p2.x, w.p2.y]] for w in self.walls]
+
+
 class Game(Base):
 
     __tablename__ = 'games'
-    game_id = sa.Column(sa.Text, primary_key=True)
 
     def __init__(self, description='', N=DEFAULT_N):
         self.game_id = get_new_id()
@@ -391,6 +382,7 @@ class Game(Base):
                 'player already registered: {}'.format(player)
             self.players.append(player)
             player.game = self
+            player.game_id = self.game_id
             player.board = self.board
             direction, pos, win_positions = self.starting_positions.pop(0)
             player.direction = direction
@@ -437,3 +429,5 @@ class Game(Base):
             self.board.remove_adjacency(Position(i, N-1), Position(i+1, N-1))
             self.board.remove_adjacency(Position(0, i), Position(0, i+1))
             self.board.remove_adjacency(Position(N-1, i), Position(N-1, i+1))
+
+        return self
