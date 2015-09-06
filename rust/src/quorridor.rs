@@ -97,13 +97,13 @@ impl Game {
 
     pub fn print(&self) {
         println!("");
-        for j in -1..self.size + 1 {
+        for j in -2..self.size + 1 {
             for i in -1..self.size + 1 {
                 if self.adj((i, j), (i, j-1)){ print!("+   ") }
                 else { print!("+ - ") }
             }
             println!("+");
-            for i in -1..self.size + 1 {
+            for i in -2..self.size + 1 {
                 let mut n = ' ';
                 for (_, p) in self.players.iter() {
                     if p.p.0 == i as i32 && p.p.1 == j as i32 {
@@ -114,7 +114,7 @@ impl Game {
             }
             println!("|");
         }
-        for _ in -1..self.size + 1 { print!("+ - ") }
+        for _ in -2..self.size + 1 { print!("+ - ") }
         println!("+");
     }
 
