@@ -4,10 +4,7 @@
 // #
 // ############################################################
 
-#[macro_use]
 use std::collections::BTreeSet;
-use std::i32;
-
 
 pub struct Player {
     pub p: (i32, i32),
@@ -45,7 +42,7 @@ impl Game {
                 if self.adj((i, j), (i-1, j)){ print!("    ") }
                 else { print!("|   ") }
             }
-            println!("");
+            println!("|");
         }
         for _ in -1..self.size + 1 { print!("+ - ") }
         println!("+");
@@ -59,9 +56,9 @@ impl Game {
 
     pub fn add_wall(&mut self, a: (i32, i32), b: (i32, i32)) -> bool {
         // Boundary conditions
-        if (a.0 < -1 || b.0 < -1 || a.1 < -1 || a.1 < -1
+        if a.0 < 0 || b.0 < 0 || a.1 < 0 || a.1 < 0
             || a.1 > self.size || b.1 > self.size
-            || a.0 > self.size || a.0 > self.size) {
+            || a.0 > self.size || a.0 > self.size {
             return false
         }
 
@@ -81,9 +78,9 @@ impl Game {
 
     pub fn adj(&self, a: (i32, i32), b: (i32, i32)) -> bool {
         // Boundary conditions
-        if (a.0 < -1 || b.0 < -1 || a.1 < -1 || a.1 < -1
+        if     a.0 < -1 || b.0 < -1 || a.1 < -1 || b.1 < -1
             || a.1 > self.size || b.1 > self.size
-            || a.0 > self.size || a.0 > self.size) {
+            || a.0 > self.size || a.0 > self.size {
             return false
         }
 
@@ -93,27 +90,27 @@ impl Game {
         }
 
         // Endzones
-        if (   ((a.1 == -1 || b.1 == -1) && (a.0 != b.0))
+        if     ((a.1 == -1 || b.1 == -1) && (a.0 != b.0))
             || ((a.0 == -1 || b.0 == -1) && (a.1 != b.1))
             || ((a.1 == self.size || b.1 == self.size) && (a.0 != b.0))
-            || ((a.0 == self.size || b.0 == self.size) && (a.1 != b.1))){
+            || ((a.0 == self.size || b.0 == self.size) && (a.1 != b.1)) {
             return false
         }
 
         // Look for vertical wall
-        if (a.1 == b.1) {
+        if a.1 == b.1 {
             let p = match a.0 < b.0 { true  => a, false => b };
-            if (self.walls.contains(&((p.0+1, p.1-1), (p.0+1, p.1+1))) ||
-                self.walls.contains(&((p.0+1, p.1),   (p.0+1, p.1+2)))) {
+            if self.walls.contains(&((p.0+1, p.1-1), (p.0+1, p.1+1))) ||
+                self.walls.contains(&((p.0+1, p.1),   (p.0+1, p.1+2))) {
                 return false
             }
         }
 
         // Look for horizontal wall
-        if (a.0 == b.0) {
+        else if a.0 == b.0 {
             let p = match a.1 < b.1 { true  => b, false => a };
-            if (self.walls.contains(&((p.0-1, p.1), (p.0+1, p.1))) ||
-                self.walls.contains(&((p.0+2, p.1), (p.0,   p.1)))) {
+            if self.walls.contains(&((p.0-1, p.1), (p.0+1, p.1))) ||
+                self.walls.contains(&((p.0+2, p.1), (p.0,   p.1))) {
                 return false
             }
         }
@@ -128,6 +125,8 @@ impl Game {
     assert!(!Game::new(5).add_wall((1, 1), (2, 2))) }
 #[test] fn test_invalid_wall_2() {
     assert!(!Game::new(5).add_wall((1, 1), (1, 4))) }
+#[test] fn test_invalid_wall_3() {
+    assert!(!Game::new(5).add_wall((-1, 0), (1, 0))) }
 #[test] fn test_valid_wall_1() {
     assert!(Game::new(5).add_wall((1, 1), (1, 3))) }
 #[test] fn test_valid_wall_2() {
@@ -148,10 +147,6 @@ impl Game {
     let mut g = Game::new(5);
     assert!(g.adj((1, 1), (1, 2)));
     assert!(g.add_wall((1, 2), (3, 2)));
-    g.print();
-    println!("{}", g.adj((1, 1), (1, 2)));
-    println!("{}", g.adj((1, 2), (1, 3)));
-    println!("{}", g.adj((1, 3), (1, 4)));
     assert!(!g.adj((1, 1), (1, 2)));
     assert!(!g.adj((2, 1), (2, 2)));
 }

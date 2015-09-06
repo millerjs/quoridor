@@ -5,24 +5,13 @@
 // ############################################################
 
 // Standard library
-extern crate hyper;
-use std::io::Write;
 use std::env;
-
-// HTTP library
-use hyper::net::Fresh;
-use hyper::{Get, Post};
-use hyper::server::Server;
-use hyper::server::Request;
-use hyper::server::Response;
-use hyper::uri::RequestUri::AbsolutePath;
 
 // Util libraries
 #[macro_use]
 extern crate log;
 extern crate num;
 extern crate env_logger;
-use std::io::copy;
 
 // Quorridor game logic
 #[allow(dead_code)]
