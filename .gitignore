@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 
+*flycheck_*
+
+
 # C extensions
 *.so
 
