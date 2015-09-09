@@ -2,8 +2,10 @@
 __pycache__/
 *.py[cod]
 
+# Rust
 *flycheck_*
-
+/target
+*.lock
 
 # C extensions
 *.so
