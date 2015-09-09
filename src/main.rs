@@ -15,9 +15,9 @@ extern crate env_logger;
 
 // Quorridor game logic
 #[allow(dead_code)]
-mod quorridor;
-use quorridor::Game;
-use quorridor::s;
+mod quoridor;
+use quoridor::Game;
+use quoridor::s;
 
 fn main() {
     env_logger::init().unwrap();
