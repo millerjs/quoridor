@@ -28,6 +28,9 @@ pub struct Game {
 }
 
 
+const MAX_DIST: i32 = 100000;
+
+
 #[allow(dead_code)]
 impl Game {
     pub fn new(size: i32) -> Game
@@ -182,9 +185,8 @@ impl Game {
         self.walls.insert((a, b));
         self.walls.insert((b, a));
 
-        let w = &self.warshall();
         for name in self.players.keys() {
-            if !self.check_win_condition(w, (*name).clone()) {
+            if !self.check_win_condition((*name).clone()) {
                 info!("Redacting wall {:?} -> {:?}, eliminates path for {}",
                       a, b, name);
                 self.walls.remove(&(a, b));
@@ -196,18 +198,20 @@ impl Game {
         Ok(format!("Added wall {:?} -> {:?}", a, b))
     }
 
-    pub fn check_win_condition(&self, w: &Vec<Vec<bool>>, name: String) -> bool
+    pub fn check_win_condition(&self, name: String) -> bool
     {
         let p = &self.players[&name];
+        let d = self.dijkstra(p.p);
+        let m = self.size+2;
         match p.id {
             0 => (1..self.size).fold(
-                false, |v, i| v || self.connected(&w, p.p, (i, self.size))),
+                false, |v, i| v || (d[(i+1+(self.size+1)*m) as usize]) < MAX_DIST),
             1 => (1..self.size).fold(
-                false, |v, i| v || self.connected(&w, p.p, (i, 0))),
+                false, |v, i| v || (d[((i+1)*m) as usize]) < MAX_DIST),
             2 => (1..self.size).fold(
-                false, |v, i| v || self.connected(&w, p.p, (self.size, i))),
+                false, |v, i| v || (d[(self.size+1+(i+1)*m) as usize]) < MAX_DIST),
             3 => (1..self.size).fold(
-                false, |v, i| v || self.connected(&w, p.p, (0, i))),
+                false, |v, i| v || (d[((i+1)*m) as usize]) < MAX_DIST),
             _ => false,
         }
     }
@@ -217,11 +221,34 @@ impl Game {
         self.turn = ((self.turn + 1) as i32 % self.players.len() as i32) as u8
     }
 
-    pub fn connected(&self, warshall: &Vec<Vec<bool>>,
-                     a: (i32, i32), b: (i32, i32)) -> bool
+    pub fn dijkstra(&self, src: (i32, i32)) -> Vec<i32>
     {
-        let m = self.size+2;
-        warshall[(a.0+1+(a.1+1)*m) as usize][(b.0+1+(b.1+1)*m) as usize]
+        let m = self.size + 2;
+        let n = (m*m) as usize;
+        let mut dist = vec![MAX_DIST; n];
+        let mut spt_set = vec![false; n];
+        dist[(src.0+1+m*(src.1+1)) as usize] = 0;
+        for _ in 0..n-1 {
+            let mut min = MAX_DIST;
+            let mut u = 0;
+            for v in 0..n {
+                if !spt_set[v] && dist[v] < min {
+                    min =  dist[v];
+                    u = v;
+                }
+            }
+            spt_set[u] = true;
+            for v in 0..n {
+                let uu = (u as i32 % m - 1, (u as i32) / m - 1);
+                let vv = (v as i32 % m - 1, (v as i32) / m - 1);
+                let guv = match self.adj(uu, vv) { true => 1, false => 0 };
+                if !spt_set[v] && guv == 1 && dist[u] != MAX_DIST
+                    && dist[u] + guv < dist[v] {
+                        dist[v] = dist[u] + guv;
+                    }
+            }
+        }
+        dist
     }
 
     pub fn warshall(&self) -> Vec<Vec<bool>>

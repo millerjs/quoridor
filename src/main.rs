@@ -29,7 +29,7 @@ fn main() {
         return
     }
 
-    let mut g = Game::new(11);
+    let mut g = Game::new(5);
     let a_key = "qwehgaa";
     let b_key = "wetgasd";
 
@@ -45,22 +45,16 @@ fn main() {
     g.add_wall((0, 4), (2, 4)).is_ok();
     g.add_wall((0, 2), (2, 2)).is_ok();
     g.add_wall((2, 2), (4, 2)).is_ok();
-    g.add_wall((4, 0), (4, 2)).is_ok();
 
     g.print();
 
-    // let w = g.warshall();
-
-    // for a in -1..g.size+1 {
-    //     for b in -1..g.size+1 {
-    //         println!("\n{} {}", a, b);
-    //         for j in -1..g.size+1 {
-    //             for i in -1..g.size+1 {
-    //                 print!("{} ", match g.connected(&w, (a, b), (i, j)) {
-    //                     true => '.', false => 'x'});
-    //             }
-    //             println!("");
-    //         }
-    //     }}
+    let d = g.dijkstra((2, 1));
+    let m = g.size + 2;
+    for b in -1..g.size+1 {
+        println!("");
+        for a in -1..g.size+1 {
+            print!("{} ", d[((a+1)+(b+1)*m) as usize]);
+        }
+    }
 
 }
