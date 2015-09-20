@@ -507,8 +507,6 @@ impl Game {
     let mut g = Game::new(5);
     assert!(g.add_player("Player 1".to_string(), "".to_string()).is_ok());
     assert!(g.add_player("Player 2".to_string(), "".to_string()).is_ok());
-    assert!(g.add_player("Player 3".to_string(), "".to_string()).is_ok());
-    assert!(g.add_player("Player 4".to_string(), "".to_string()).is_ok());
     assert!(g.add_player("Player 5".to_string(), "".to_string()).is_err());
 }
 
