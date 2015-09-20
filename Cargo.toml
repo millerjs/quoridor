@@ -4,8 +4,12 @@ version = "0.1.0"
 authors = ["Joshua Miller <jshuasmiller@gmail.com>"]
 
 [dependencies]
+iron = "*"
+router = "*"
+hyper = "*"
+
 rand = "0.3"
-hyper = "0.6.10"
 num = "*"
 log = "*"
 env_logger = "*"
+rustc-serialize = "0.3"
