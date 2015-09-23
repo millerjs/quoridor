@@ -4,10 +4,11 @@
 // #
 // ############################################################
 
-use std::collections::BTreeSet;
-use std::collections::BTreeMap;
+use rustc_serialize::json::Json;
+use rustc_serialize::json::ToJson;
 use std::borrow::ToOwned;
-use rustc_serialize::json::{ToJson, Json};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 
 pub fn s(string: &str) -> String {
@@ -30,7 +31,6 @@ pub struct Game {
 }
 
 const MAX_DIST: i32 = 100000;
-
 
 impl Player {
     pub fn to_json(&self, name: &String) -> Json {
@@ -57,23 +57,23 @@ impl Game {
         }
     }
 
-    /// Return the game state as JSON
-    pub fn to_json(&self) -> Json {
-        let mut d = BTreeMap::new();
-        let mut walls: Vec<Vec<Vec<i32>>> = vec![];
-        for w in self.walls.iter() {
-            let (a, b) = (w.0, w.1);
-            walls.push(vec![vec![a.0, a.1], vec![b.0, b.1]])
+    /// Starts the game, assigns wall chips, sets the turn
+    pub fn start_game(&mut self)
+    {
+        self.turn = 0;
+        assert!(self.players.len() == 4 || self.players.len() == 2);
+        if self.players.len() == 4 {
+            for (_, p) in self.players.iter_mut() { p.walls = 5 }
         }
-        d.insert(s("turn"), self.turn.to_json());
-        d.insert(s("size"), self.size.to_json());
-        d.insert(s("walls"), walls.to_json());
-        let mut players: Vec<Json> = vec![];
-        for (name, p) in self.players.iter() {
-            players.push(p.to_json(name))
+        if self.players.len() == 2 {
+            for (_, p) in self.players.iter_mut() { p.walls = 10 }
         }
-        d.insert(s("players"), players.to_json());
-        Json::Object(d)
+    }
+
+    /// Increment the turn counter
+    pub fn next_turn(&mut self)
+    {
+        self.turn = (self.turn + 1) % (self.players.len() as i32)
     }
 
     /// Adds a player given a name, and a password `key`
@@ -87,18 +87,15 @@ impl Game {
     pub fn add_player(&mut self, name: String, key: String)
                       -> Result<String, String>
     {
-        if self.turn > 0 {
+        if self.turn >= 0 {
             return Err(s("Game already started"));
-        }
-
-        if self.players.contains_key(&name) {
+        } else if self.players.contains_key(&name) {
             return Err(format!("Player {} already registered.", name.clone()))
-        }
-
-        if self.players.len() >= 2 {
+        } else if self.players.len() >= 2 {
             return Err(format!("Attempt to register 3rd player."))
         }
 
+        // Create and add the player
         let i = self.players.len();
         self.players.insert(name.clone(), Player {
             p: [(self.size/2, 0), (self.size/2, self.size-1),
@@ -108,9 +105,18 @@ impl Game {
             walls: 0,
         });
 
+        // If we have enough players, start the game
+        if self.players.len() == 2 { self.start_game() }
+
         return Ok(format!("Added player {}", name))
     }
 
+    /// Moves a player to an (x, y) coordinate.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the player.
+    /// * `pos`  - The (x, y) coordinates to try and move to
     pub fn move_player_to(&mut self, name: String, pos: (i32, i32))
                        -> Result<String, String>
     {
@@ -139,7 +145,7 @@ impl Game {
                     // Linear jumps
                     if self.get_player_at_position((pos.0-dx/2, pos.1-dy/2)).is_err()
                         || !self.adj((pos.0-dx/2, pos.1-dy/2), (pos.0, pos.1))
-                        || !self.adj((pos.0-dx/2, pos.1-dy/2), (pos.0-dx, pos.1-dy)){
+                        || !self.adj((pos.0-dx/2, pos.1-dy/2), (pos.0-dx, pos.1-dy)) {
                         return Err(format!(
                             "Invalid linear jump for {} from {:?} to {:?}",
                             name, p.p, pos))
@@ -152,7 +158,7 @@ impl Game {
                           && self.adj((pos.0, pos.1), (pos.0, p.p.1)))
                          || (!self.adj((p.p.0, pos.1), (p.p.0, pos.1+dy))
                              && self.adj((p.p.0, p.p.1), (p.p.0, pos.1))
-                             && self.adj((pos.0, pos.1), (p.p.0, pos.1)))){
+                             && self.adj((pos.0, pos.1), (p.p.0, pos.1)))) {
                         return Err(format!(
                             "Invalid corner jump for {} from {:?} to {:?}",
                             name, p.p, pos))
@@ -164,13 +170,18 @@ impl Game {
             }
         }
 
-        if let Some(p) = self.players.get_mut(&name) {
-            p.p = pos;
-        }
+        // If we made it here, then the move is valid.
+        if let Some(p) = self.players.get_mut(&name) { p.p = pos; }
 
         Ok(format!("Moved player to {:?}", &self.players[&name].p))
     }
 
+    /// Moves a player a direction (one of UP, DOWN, LEFT, RIGHT)
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the player.
+    /// * `dir`  - A string specifying which direction to move
     pub fn move_player(&mut self, name: String, dir: String)
                        -> Result<String, String>
     {
@@ -184,7 +195,7 @@ impl Game {
         })
     }
 
-
+    /// Check if there is a player at position (x, y)
     pub fn get_player_at_position(&self, p: (i32, i32))
                                   -> Result<String, String>
     {
@@ -196,41 +207,54 @@ impl Game {
         Err(s("No player found"))
     }
 
+    /// Print ASCII representation to stdout
     pub fn print(&self)
     {
+        println!("{}", self.to_string());
+    }
+
+    /// Construct ASCII representation
+    pub fn to_string(&self) -> String
+    {
+        let mut board = "".to_string();
         let x = "+";
-        print!("  ");
-        for i in -1..self.size + 1 { print!("{:4}", i) };
-        println!("");
+        board.push_str("  ");
+        for i in -1..self.size + 1 {
+            board.push_str(&*format!("{:4}", i)) };
+        board.push_str("\n");
+
+        // Vertical iteration
         for j in -1..self.size + 1 {
-            print!("   ");
+            board.push_str("   ");
             for i in -1..self.size + 1 {
-                if self.adj((i, j), (i, j-1)){ print!("{}   ", x) }
-                else { print!("{} - ", x) }
+                if self.adj((i, j), (i, j-1)){
+                    board.push_str(&*format!("{}   ", x)) }
+                else { board.push_str(&*format!("{} - ", x)) }
             }
-            print!("+\n{:2} ", j);
+            board.push_str(&*format!("+\n{:2} ", j));
+
+            // Horizontal iteration
             for i in -1..self.size + 1 {
                 let n = match self.get_player_at_position((i, j)) {
                     Ok(name) => format!("{}", self.players[&name].id),
                     Err(_) => s(" ")
                 };
-                if self.adj((i, j), (i-1, j)){ print!("  {} ", n) }
-                else { print!("| {} ", n) }
+                if self.adj((i, j), (i-1, j)){
+                    board.push_str(&*format!("  {} ", n)) }
+                else { board.push_str(&*format!("| {} ", n)) }
             }
-            println!("|");
+
+            board.push_str("|\n");
         }
-        print!("   ");
-        for _ in -1..self.size + 1 { print!("+ - ") }
-        println!("+");
+        board.push_str("   ");
+        for _ in -1..self.size + 1 { board.push_str("+ - ") }
+        board.push_str("+\n");
+        board
     }
 
-    pub fn print_walls(&self)
-    {
-        for w in self.walls.iter() {
-            println!("Wall from {:?} to {:?}", w.0, w.1);
-        }
-    }
-
+    /// Place a wall from intersection a->b
+    ///
+    /// # Note: wall b->a will also be stored
     pub fn add_wall(&mut self, mut a: (i32, i32), mut b: (i32, i32))
                     -> Result<String, String>
     {
@@ -288,6 +312,8 @@ impl Game {
         Ok(format!("Added wall {:?} -> {:?}", a, b))
     }
 
+    /// Check to see if all players have at least 1 possible path to
+    /// their endzone
     pub fn check_win_condition(&self, name: String) -> bool
     {
         let p = &self.players[&name];
@@ -306,11 +332,8 @@ impl Game {
         }
     }
 
-    pub fn inc_turn(&mut self)
-    {
-        self.turn = (self.turn + 1) % (self.players.len() as i32)
-    }
-
+    /// Calculate the length of the shorted path from given source point to
+    /// all other points points on the board. This is O(n^2).
     pub fn dijkstra(&self, src: (i32, i32)) -> Vec<i32>
     {
         let m = self.size + 2;
@@ -341,6 +364,8 @@ impl Game {
         dist
     }
 
+    /// Calculate if traversal is possible to for all cominations of
+    /// points on the board. This is O(n^3).
     pub fn warshall(&self) -> Vec<Vec<bool>>
     {
         let m = self.size + 2;
@@ -363,6 +388,8 @@ impl Game {
         w
     }
 
+    /// Test to see if points a and b are adjacent (you can move a
+    /// piece from a to b).
     pub fn adj(&self, a: (i32, i32), b: (i32, i32)) -> bool
     {
         // Boundary conditions
@@ -407,117 +434,23 @@ impl Game {
         return true;
     }
 
-}
-
-
-#[test] fn test_invalid_wall_1() {
-    assert!(Game::new(5).add_wall((1, 1), (2, 2)).is_err())
-}
-
-#[test] fn test_invalid_wall_2() {
-    assert!(Game::new(5).add_wall((1, 1), (1, 4)).is_err())
-}
-
-#[test] fn test_invalid_wall_3() {
-    assert!(Game::new(5).add_wall((-1, 0), (1, 0)).is_err())
-}
-
-#[test] fn test_invalid_wall_4() {
-    assert!(Game::new(5).add_wall((4, 0), (6, 0)).is_err())
-}
-
-#[test] fn test_wall_vertical_collisions() {
-    let mut g = Game::new(5);
-    assert!(g.add_wall((1, 1), (1, 3)).is_ok());
-    assert!(g.add_wall((1, 2), (1, 4)).is_err());
-    assert!(g.add_wall((1, 0), (1, 2)).is_err());
-    assert!(g.add_wall((0, 2), (2, 2)).is_err());
-}
-
-#[test] fn test_wall_horizontal_collisions() {
-    let mut g = Game::new(5);
-    assert!(g.add_wall((1, 1), (3, 1)).is_ok());
-    g.print();
-    assert!(g.add_wall((2, 1), (4, 1)).is_err());
-    assert!(g.add_wall((0, 1), (2, 1)).is_err());
-    assert!(g.add_wall((2, 0), (2, 2)).is_err());
-}
-
-#[test] fn test_valid_wall_1() {
-    assert!(Game::new(5).add_wall((1, 1), (1, 3)).is_ok())
-}
-
-#[test] fn test_valid_wall_2() {
-    assert!(Game::new(5).add_wall((1, 3), (1, 1)).is_ok())
-}
-
-#[test] fn test_valid_wall_3() {
-    assert!(Game::new(5).add_wall((1, 3), (3, 3)).is_ok())
-}
-
-#[test] fn test_valid_wall_4() {
-    assert!(Game::new(5).add_wall((3, 3), (1, 3)).is_ok())
-}
-
-#[test] fn test_valid_wall_5() {
-    let mut g = Game::new(5);
-    g.add_player(s("Player 1"), s(""));
-    assert!(g.add_wall((0, 2), (2, 2)).is_ok());
-    assert!(g.add_wall((2, 2), (4, 2)).is_ok());
-    assert!(g.add_wall((4, 0), (4, 2)).is_err());
-}
-
-#[test] fn test_adj_1() {
-    let mut g = Game::new(5);
-    for i in 0..g.size {
-        for j in 0..g.size {
-            assert!(!g.adj((i, j), (i+2, j)));
-            assert!(!g.adj((i, j), (i-2, j)));
-            assert!(!g.adj((i, j), (i, j+2)));
-            assert!(!g.adj((i, j), (i, j-2)));
-            assert!(!g.adj((i, j), (i-1, j-1)));
-            assert!(!g.adj((i, j), (i+1, j+1)));
-            assert!(!g.adj((i, j), (i-1, j+1)));
-            assert!(!g.adj((i, j), (i+1, j-1)));
+    /// Return the game state as JSON
+    pub fn to_json(&self) -> Json {
+        let mut d = BTreeMap::new();
+        let mut walls: Vec<Vec<Vec<i32>>> = vec![];
+        for w in self.walls.iter() {
+            let (a, b) = (w.0, w.1);
+            walls.push(vec![vec![a.0, a.1], vec![b.0, b.1]])
         }
+        d.insert(s("turn"), self.turn.to_json());
+        d.insert(s("size"), self.size.to_json());
+        d.insert(s("walls"), walls.to_json());
+        let mut players: Vec<Json> = vec![];
+        for (name, p) in self.players.iter() {
+            players.push(p.to_json(name))
+        }
+        d.insert(s("players"), players.to_json());
+        Json::Object(d)
     }
-}
 
-#[test] fn test_adj_vertical_1() {
-    let mut g = Game::new(5);
-    assert!(g.adj((1, 1), (2, 1)));
-    assert!(g.add_wall((2, 1), (2, 3)).is_ok());
-    assert!(!g.adj((1, 1), (2, 1)));
-    assert!(!g.adj((1, 2), (2, 2)));
-    assert!(!g.adj((2, 1), (1, 1)));
-    assert!(!g.adj((2, 2), (1, 2)));
-}
-
-#[test] fn test_adj_horizontal_1() {
-    let mut g = Game::new(5);
-    assert!(g.adj((1, 1), (1, 2)));
-    assert!(g.add_wall((1, 2), (3, 2)).is_ok());
-    assert!(!g.adj((1, 1), (1, 2)));
-    assert!(!g.adj((2, 1), (2, 2)));
-    assert!(!g.adj((1, 2), (1, 1)));
-    assert!(!g.adj((2, 2), (2, 1)));
-}
-
-#[test] fn test_add_players() {
-    let mut g = Game::new(5);
-    assert!(g.add_player("Player 1".to_string(), "".to_string()).is_ok());
-    assert!(g.add_player("Player 2".to_string(), "".to_string()).is_ok());
-    assert!(g.add_player("Player 5".to_string(), "".to_string()).is_err());
-}
-
-#[test] fn test_move_player() {
-    let mut g = Game::new(5);
-    assert!(g.add_player(s("Player 1"), s("a")).is_ok());
-    assert!(g.move_player(s("Player 1"), s("UP")).is_err());
-    assert!(g.move_player(s("Player 1"), s("DOWN")).is_ok());
-    assert_eq!(g.players[&s("Player 1")].p,  (2, 1));
-    assert!(g.move_player(s("Player 1"), s("LEFT")).is_ok());
-    assert_eq!(g.players[&s("Player 1")].p,  (1, 1));
-    assert!(g.add_wall((0, 1), (2, 1)).is_ok());
-    assert!(g.move_player(s("Player 1"), s("UP")).is_err());
 }
