@@ -1,16 +1,17 @@
+# quoridor
 [![Build Status](https://api.travis-ci.org/millerjs/quoridor.svg?branch=master)](https://api.travis-ci.org/millerjs/quoridor.svg)
 
-# quoridor
-A [quoridor](https://en.wikipedia.org/wiki/Quoridor) game server implementation in [Rust](https://www.rust-lang.org/) using the [Iron web framework](https://github.com/iron/iron)
-
-### Build
-
-To build and run, use [Cargo](https://crates.io/).  Rust dependencies will be installed automatically.
+A [quoridor](https://en.wikipedia.org/wiki/Quoridor) game server implementation in [Rust](https://www.rust-lang.org/) using [Iron](https://github.com/iron/iron).
 
 ### Requirements
 
-- [Rust 1.3.0](https://www.rust-lang.org/install.html)
-- [Cargo](https://crates.io/)
+- [Rust 1.3.0](https://www.rust-lang.org/install.html) - A systems programming language that runs blazingly fast, prevents almost all crashes, and eliminates data races
+- [Cargo](https://crates.io/) - The Rust package manager
+
+
+### Build
+
+To build and run, install [Rust 1.3.0](https://www.rust-lang.org/install.html) and [Cargo](https://crates.io/). (Rust dependencies will be installed automatically.)
 
 #### Run tests
 
