@@ -123,6 +123,8 @@ curl -XPOST localhost:9999/api/move_player -d '{
 
 #### Move player to position
 
+Pro tip: This is how you perform jumps.
+
 ```
 curl -XPOST localhost:9999/api/move_player_to -d '{
      "name": "Player 2",
