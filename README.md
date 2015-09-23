@@ -1,19 +1,31 @@
 [![Build Status](https://api.travis-ci.org/millerjs/quoridor.svg?branch=master)](https://api.travis-ci.org/millerjs/quoridor.svg)
 
 # quoridor
-A [quoridor](https://en.wikipedia.org/wiki/Quoridor) game server implementation in Rust.
+A [quoridor](https://en.wikipedia.org/wiki/Quoridor) game server implementation in [Rust](https://www.rust-lang.org/) using the [Iron web framework](https://github.com/iron/iron)
 
-### Run tests
+### Build
+
+To build and run, use [Cargo](https://crates.io/).  Rust dependencies will be installed automatically.
+
+### Requirements
+
+- [Rust 1.3.0](https://www.rust-lang.org/install.html)
+- [Cargo](https://crates.io/)
+
+#### Run tests
 
 ```rust
 cargo test
 ```
+
+#### Build and run server on port 9999
 
 ```rust
 cargo run 0:9999
 ```
 
 ### Examples using curl
+
 
 #### Register two players
 
@@ -28,24 +40,39 @@ curl -XPOST localhost:9999/api/register_player -d '{
 }'
 ```
 
-#### Move player by direction
+#### Get ascii representation of the board
 
 ```
-curl -XPOST localhost:9999/api/move_player -d '{
-     "name": "Player 1",
-     "key": "abcd",
-     "direction": "down",
-}'
+curl -XGET localhost:9999/api/ascii
 ```
 
-#### Move player to position
+**Output:**
 
 ```
-curl -XPOST localhost:9999/api/move_player_to -d '{
-     "name": "Player 2",
-     "key": "efgh",
-     "position": [4, 7],
-}'
+    -1   0   1   2   3   4   5   6   7   8   9
+   + - + - + - + - + - + - + - + - + - + - + - +
+-1 |   |   |   |   |   |   |   |   |   |   |   |
+   + - +   +   +   +   +   +   +   +   +   + - +
+ 0 |                     0                     |
+   + - +   +   +   +   +   +   +   +   +   + - +
+ 1 |                                           |
+   + - +   +   +   +   +   +   +   +   +   + - +
+ 2 |                                           |
+   + - +   +   +   +   +   +   +   +   +   + - +
+ 3 |                                           |
+   + - +   +   +   +   +   +   +   +   +   + - +
+ 4 |                                           |
+   + - +   +   +   +   +   +   +   +   +   + - +
+ 5 |                                           |
+   + - +   +   +   +   +   +   +   +   +   + - +
+ 6 |                                           |
+   + - +   +   +   +   +   +   +   +   +   + - +
+ 7 |                                           |
+   + - +   +   +   +   +   +   +   +   +   + - +
+ 8 |                     1                     |
+   + - +   +   +   +   +   +   +   +   +   + - +
+ 9 |   |   |   |   |   |   |   |   |   |   |   |
+   + - + - + - + - + - + - + - + - + - + - + - +
 ```
 
 ### Get board state
@@ -82,6 +109,26 @@ curl localhost:9999/api/state
     "turn": 0,
     "walls": []
 }
+```
+
+#### Move player by direction
+
+```
+curl -XPOST localhost:9999/api/move_player -d '{
+     "name": "Player 1",
+     "key": "abcd",
+     "direction": "down",
+}'
+```
+
+#### Move player to position
+
+```
+curl -XPOST localhost:9999/api/move_player_to -d '{
+     "name": "Player 2",
+     "key": "efgh",
+     "position": [4, 7],
+}'
 ```
 
 ### Wait for another player to take a turn
