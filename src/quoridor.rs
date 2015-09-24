@@ -1,8 +1,10 @@
-// ############################################################
-// #
-// #  Quoridor game logic
-// #
-// ############################################################
+/***********************************************************************
+ * Quoridor game logic
+ *
+ * author: Joshua Miller
+ * email: jshuasmiller@gmail.com
+ *
+ ***********************************************************************/
 
 use rustc_serialize::json::Json;
 use rustc_serialize::json::ToJson;
@@ -11,9 +13,18 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 
+const MAX_DIST: i32 = 100000;
+pub const GAME_OVER: i32 = -2;
+pub const GAME_NOT_STARTED: i32 = -2;
+
 pub fn s(string: &str) -> String {
     string.to_owned()
 }
+
+
+/***********************************************************************
+ * Game Structs
+ ***********************************************************************/
 
 #[derive(Debug)]
 pub struct Player {
@@ -30,7 +41,9 @@ pub struct Game {
     pub turn: i32,
 }
 
-const MAX_DIST: i32 = 100000;
+/***********************************************************************
+ * Player implementations
+ ***********************************************************************/
 
 impl Player {
     pub fn to_json(&self, name: &String) -> Json {
@@ -43,6 +56,10 @@ impl Player {
     }
 }
 
+/***********************************************************************
+ * Game implementations
+ ***********************************************************************/
+
 #[allow(dead_code)]
 impl Game {
 
@@ -53,7 +70,7 @@ impl Game {
             size: size,
             players: BTreeMap::new(),
             walls:  BTreeSet::new(),
-            turn: -1,
+            turn: GAME_NOT_STARTED,
         }
     }
 
@@ -73,6 +90,17 @@ impl Game {
     /// Increment the turn counter
     pub fn next_turn(&mut self)
     {
+        // Check if someone won
+        for (_, p) in self.players.iter() {
+            if     (p.p.1 < 0 && p.id != 1)
+                || (p.p.1 >= self.size && p.id != 0)
+                || (p.p.0 < 0 && p.id != 2)
+                || (p.p.1 >= self.size && p.id != 3)
+            {
+                self.turn == GAME_OVER;
+            }
+        }
+
         self.turn = (self.turn + 1) % (self.players.len() as i32)
     }
 
@@ -124,12 +152,11 @@ impl Game {
             return Err(s("Player not found."))
         } else {
             let p = &self.players[&name];
-            let e = format!("Cannot move player {} to {:?}", name, pos);
 
             // Boundary checks
-            if (pos.1 < 0 && p.id != 1) || (pos.1 > self.size && p.id != 0) ||
-                (pos.0 < 0 && p.id != 2) || (pos.1 > self.size && p.id != 3){
-                    return Err(e)
+            if (pos.1 < 0 && p.id != 1) || (pos.1 >= self.size && p.id != 0) ||
+                (pos.0 < 0 && p.id != 2) || (pos.0 >= self.size && p.id != 3){
+                    return Err(s("Atempted to move out of bounds"))
                 }
 
             // Check position
@@ -165,7 +192,8 @@ impl Game {
                     }
 
                 } else {
-                    return Err(e)
+                    return Err(format!(
+                        "Cannot move player {} to {:?}", name, pos))
                 }
             }
         }

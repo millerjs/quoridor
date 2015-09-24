@@ -1,4 +1,13 @@
+/***********************************************************************
+ * Quoridor game tests
+ *
+ * author: Joshua Miller
+ * email: jshuasmiller@gmail.com
+ *
+ ***********************************************************************/
+
 use quoridor::Game;
+use quoridor::GAME_OVER;
 use quoridor::s;
 
 
@@ -128,4 +137,25 @@ fn test_move_player() {
     assert_eq!(g.players[&s("Player 1")].p,  (1, 1));
     assert!(g.add_wall((0, 1), (2, 1)).is_ok());
     assert!(g.move_player(s("Player 1"), s("UP")).is_err());
+}
+
+#[test]
+fn test_move_player_boundary() {
+    let mut g = Game::new(5);
+    assert!(g.add_player(s("Player 1"), s("a")).is_ok());
+    assert!(g.add_player(s("Player 2"), s("a")).is_ok());
+    assert!(g.move_player(s("Player 1"), s("UP")).is_err());
+    assert!(g.move_player(s("Player 2"), s("DOWN")).is_err());
+}
+
+#[test]
+fn test_end_game() {
+    let mut g = Game::new(5);
+    assert!(g.add_player(s("Player 1"), s("a")).is_ok());
+    for i in 0..4 {
+        assert!(g.move_player(s("Player 1"), s("DOWN")).is_ok());
+    }
+    assert!(g.move_player(s("Player 1"), s("DOWN")).is_ok());
+    assert_eq!(g.turn, GAME_OVER);
+    assert!(g.move_player(s("Player 1"), s("DOWN")).is_err());
 }

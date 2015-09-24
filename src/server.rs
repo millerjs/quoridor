@@ -1,4 +1,11 @@
-use std::error::Error;
+/***********************************************************************
+ * Quoridor game server
+ *
+ * author: Joshua Miller
+ * email: jshuasmiller@gmail.com
+ *
+ ***********************************************************************/
+
 use router::Router;
 use iron::status;
 use rustc_serialize::json::ToJson;
@@ -9,10 +16,12 @@ use std::sync::Condvar;
 use std::sync::RwLock;
 use std::io::Read;
 use iron::prelude::*;
-use quoridor::Game;
 use mount::Mount;
 use staticfile::Static;
 use std::path::Path;
+use quoridor::Game;
+use quoridor::GAME_OVER;
+use quoridor::GAME_NOT_STARTED;
 
 /***********************************************************************
  * Structs which define post request bodies
@@ -149,9 +158,13 @@ macro_rules! check_player {
                 return Ok(Response::with(
                     (status::BadRequest, "Unauthorized move.")))
             }
-            if $game.turn == -1 {
+            if $game.turn == GAME_NOT_STARTED {
                 return Ok(Response::with(
                     (status::BadRequest, "Waiting on other players.")))
+            }
+            if $game.turn == GAME_OVER {
+                return Ok(Response::with(
+                    (status::BadRequest, "The game is over!")))
             }
             if $game.players[&$name].id as i32 != $game.turn {
                 return Ok(Response::with(
