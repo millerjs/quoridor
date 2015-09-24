@@ -142,3 +142,14 @@ call on the server!
 ```
 curl -XGET localhost:9999/api/wait_for_activity
 ```
+
+### Place a wall
+
+```
+curl -XPOST localhost:9999/api/place_wall -d '{
+     "name": "Player 1",
+    "key": "asgm",
+    "p1": [0, 0],
+    "p2": [2, 4]
+}'
+```
