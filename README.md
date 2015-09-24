@@ -153,3 +153,9 @@ curl -XPOST localhost:9999/api/place_wall -d '{
     "p2": [2, 4]
 }'
 ```
+
+## TODO
+
+- Add postgresql integration
+- Add time limits
+- Add runtime option for 4 players
