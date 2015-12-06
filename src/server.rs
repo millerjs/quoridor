@@ -20,6 +20,7 @@ use mount::Mount;
 use staticfile::Static;
 use std::path::Path;
 use quoridor::Game;
+use quoridor::Wall;
 use quoridor::GAME_OVER;
 use quoridor::GAME_NOT_STARTED;
 
@@ -215,8 +216,10 @@ fn move_player(request: &mut Request, game: &mut Game) -> IronResult<Response>
 fn place_wall(request: &mut Request, game: &mut Game) -> IronResult<Response>
 {
     let data: WallRequest = parse_payload!(request);
-    take_turn!(game, data.name, data.key, game.add_wall((
-        data.p1[0], data.p1[1]), (data.p2[0], data.p2[1])))
+    let a = (data.p1[0], data.p1[1]);
+    let b = (data.p2[0], data.p2[1]);
+    let wall = Wall::from_tuples(a, b).unwrap();
+    take_turn!(game, data.name, data.key, game.add_wall(&wall))
 }
 
 fn wait_for_activity(_: &mut Request, lock: &Mutex<bool>, cvar: &Condvar)
