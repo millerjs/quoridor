@@ -21,6 +21,7 @@ use staticfile::Static;
 use std::path::Path;
 use quoridor::Game;
 use quoridor::Wall;
+use quoridor::_p;
 use quoridor::GAME_OVER;
 use quoridor::GAME_NOT_STARTED;
 
@@ -203,7 +204,7 @@ fn move_player_to(request: &mut Request, game: &mut Game) -> IronResult<Response
 {
     let data: PlayerMoveToRequest = parse_payload!(request);
     take_turn!(game, data.name, data.key, game.move_player_to(
-        data.name, (data.position[0], data.position[1])))
+        data.name, _p(data.position[0], data.position[1])))
 }
 
 fn move_player(request: &mut Request, game: &mut Game) -> IronResult<Response>

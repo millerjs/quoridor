@@ -9,8 +9,9 @@
 use quoridor::N;
 use quoridor::Game;
 use quoridor::Wall;
+use quoridor::Point;
 use quoridor::GAME_OVER;
-use quoridor::s;
+use quoridor::{s, _p};
 
 
 #[test]
@@ -96,14 +97,14 @@ fn test_adj_1() {
     let g = Game::new();
     for i in 0..N {
         for j in 0..N {
-            assert!(!g.adj((i, j), (i+2, j)));
-            assert!(!g.adj((i, j), (i-2, j)));
-            assert!(!g.adj((i, j), (i, j+2)));
-            assert!(!g.adj((i, j), (i, j-2)));
-            assert!(!g.adj((i, j), (i-1, j-1)));
-            assert!(!g.adj((i, j), (i+1, j+1)));
-            assert!(!g.adj((i, j), (i-1, j+1)));
-            assert!(!g.adj((i, j), (i+1, j-1)));
+            assert!(!g.adj(_p(i, j), _p(i+2, j)));
+            assert!(!g.adj(_p(i, j), _p(i-2, j)));
+            assert!(!g.adj(_p(i, j), _p(i, j+2)));
+            assert!(!g.adj(_p(i, j), _p(i, j-2)));
+            assert!(!g.adj(_p(i, j), _p(i-1, j-1)));
+            assert!(!g.adj(_p(i, j), _p(i+1, j+1)));
+            assert!(!g.adj(_p(i, j), _p(i-1, j+1)));
+            assert!(!g.adj(_p(i, j), _p(i+1, j-1)));
         }
     }
 }
@@ -111,23 +112,23 @@ fn test_adj_1() {
 #[test]
 fn test_adj_vertical_1() {
     let mut g = Game::new();
-    assert!(g.adj((1, 1), (2, 1)));
+    assert!(g.adj(_p(1, 1), _p(2, 1)));
     assert!(g.add_wall_tuples((2, 1), (2, 3)).is_ok());
-    assert!(!g.adj((1, 1), (2, 1)));
-    assert!(!g.adj((1, 2), (2, 2)));
-    assert!(!g.adj((2, 1), (1, 1)));
-    assert!(!g.adj((2, 2), (1, 2)));
+    assert!(!g.adj(_p(1, 1), _p(2, 1)));
+    assert!(!g.adj(_p(1, 2), _p(2, 2)));
+    assert!(!g.adj(_p(2, 1), _p(1, 1)));
+    assert!(!g.adj(_p(2, 2), _p(1, 2)));
 }
 
 #[test]
 fn test_adj_horizontal_1() {
     let mut g = Game::new();
-    assert!(g.adj((1, 1), (1, 2)));
+    assert!(g.adj(_p(1, 1), _p(1, 2)));
     assert!(g.add_wall_tuples((1, 2), (3, 2)).is_ok());
-    assert!(!g.adj((1, 1), (1, 2)));
-    assert!(!g.adj((2, 1), (2, 2)));
-    assert!(!g.adj((1, 2), (1, 1)));
-    assert!(!g.adj((2, 2), (2, 1)));
+    assert!(!g.adj(_p(1, 1), _p(1, 2)));
+    assert!(!g.adj(_p(2, 1), _p(2, 2)));
+    assert!(!g.adj(_p(1, 2), _p(1, 1)));
+    assert!(!g.adj(_p(2, 2), _p(2, 1)));
 }
 
 #[test]
@@ -144,9 +145,9 @@ fn test_move_player() {
     assert!(g.add_player(s("Player 1"), s("a")).is_ok());
     assert!(g.move_player(s("Player 1"), s("UP")).is_err());
     assert!(g.move_player(s("Player 1"), s("DOWN")).is_ok());
-    assert_eq!(g.players[&s("Player 1")].p,  (4, 1));
+    assert_eq!(g.players[&s("Player 1")].p,  _p(4, 1));
     assert!(g.move_player(s("Player 1"), s("LEFT")).is_ok());
-    assert_eq!(g.players[&s("Player 1")].p,  (3, 1));
+    assert_eq!(g.players[&s("Player 1")].p,  _p(3, 1));
     assert!(g.add_wall_tuples((2, 1), (4, 1)).is_ok());
     assert!(g.move_player(s("Player 1"), s("UP")).is_err());
 }
@@ -164,7 +165,7 @@ fn test_move_player_boundary() {
 fn test_end_game() {
     let mut g = Game::new();
     assert!(g.add_player(s("Player 1"), s("a")).is_ok());
-    for i in 0..N-1 {
+    for _ in 0..N-1 {
         assert!(g.move_player(s("Player 1"), s("DOWN")).is_ok());
     }
     assert!(g.move_player(s("Player 1"), s("DOWN")).is_ok());

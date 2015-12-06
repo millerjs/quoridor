@@ -18,9 +18,7 @@ pub const GAME_OVER: i32 = -2;
 pub const GAME_NOT_STARTED: i32 = -2;
 pub const N: i32 = 9;
 
-pub fn s(string: &str) -> String {
-    string.to_owned()
-}
+pub fn s(string: &str) -> String { string.to_owned() }
 
 
 /***********************************************************************
@@ -29,8 +27,8 @@ pub fn s(string: &str) -> String {
 
 #[derive(Debug)]
 pub struct Player {
-    pub p: (i32, i32),
-    pub p_last: Option<(i32, i32)>,
+    pub p: Point,
+    pub p_last: Option<Point>,
     pub key: String,
     pub id: u8,
     pub walls: u8,
@@ -50,6 +48,7 @@ pub struct Wall {
     d: Direction,
 }
 
+#[derive(Debug,PartialOrd,Ord,PartialEq,Eq,Copy,Clone)]
 pub struct Point {
     x: i32,
     y: i32,
@@ -70,8 +69,10 @@ pub struct Game {
 #[derive(Debug)]
 pub enum Turn {
     PlaceWall(Wall),
-    Move(i32, i32),
+    Move(Point),
 }
+
+pub fn _p(x: i32, y: i32) -> Point { Point{x: x, y: y} }
 
 
 impl OnBoard for Point {
@@ -79,6 +80,7 @@ impl OnBoard for Point {
         self.x >= 0 && self.x < N && self.y >= 0 && self.y < N
     }
 }
+
 
 impl OnBoard for Wall {
     fn inbounds(&self) -> bool {
@@ -118,15 +120,15 @@ impl Wall {
 
 impl Player {
     pub fn has_won(&self) -> bool {
-        return (self.id != 1 && self.p.1 < 0)
-            || (self.id != 2 && self.p.0 < 0)
-            || (self.id != 0 && self.p.1 >= N)
-            || (self.id != 3 && self.p.1 >= N)
+        return (self.id != 1 && self.p.y < 0)
+            || (self.id != 2 && self.p.x < 0)
+            || (self.id != 0 && self.p.y >= N)
+            || (self.id != 3 && self.p.y >= N)
     }
 
     pub fn to_json(&self) -> Json {
         let mut d = BTreeMap::new();
-        d.insert(s("position"), vec![self.p.0, self.p.1].to_json());
+        d.insert(s("position"), vec![self.p.x, self.p.y].to_json());
         d.insert(s("id"), self.id.to_json());
         d.insert(s("walls"), self.walls.to_json());
         d.insert(s("name"), self.name.to_json());
@@ -196,7 +198,8 @@ impl Game {
 
         // Create and add the player
         let i = self.players.len();
-        let starting_positions = [(N/2, 0), (N/2, N-1), (0, N/2), (N-1, N/2)];
+        let starting_positions = [
+            _p(N/2, 0), _p(N/2, N-1), _p(0, N/2), _p(N-1, N/2)];
         self.players.insert(name.clone(), Player {
             p: starting_positions[i],
             p_last: None,
@@ -213,9 +216,9 @@ impl Game {
     }
 
     pub fn do_turn(&mut self, name: String, turn: Turn) {
-        match turn {
+        let _ = match turn {
             Turn::PlaceWall(wall) => self.add_wall(&wall),
-            Turn::Move(x, y) => self.move_player_to(name, (x, y))
+            Turn::Move(p) => self.move_player_to(name, p),
         };
     }
 
@@ -225,7 +228,7 @@ impl Game {
                 self.walls.remove(&wall);
                 self.walls.remove(&wall);
             }
-            Turn::Move(x, y) => {
+            Turn::Move(_) => {
                 if let Some(p) = self.players.get_mut(&name) {
                     match p.p_last {
                         Some(pos) => p.p = pos,
@@ -236,17 +239,17 @@ impl Game {
         };
     }
 
-    pub fn is_valid_move(&mut self, name: String, pos: (i32, i32)) -> bool
+    pub fn is_valid_move(&mut self, name: String, pos: Point) -> bool
     {
         if !self.players.contains_key(&name) {
             debug!("Player not found.");
             return false
         } else {
-            let p = &self.players[&name];
+            let pl = &self.players[&name];
 
             // Boundary checks
-            if (pos.1 < 0 && p.id != 1) || (pos.1 >= N && p.id != 0) ||
-                (pos.0 < 0 && p.id != 2) || (pos.0 >= N && p.id != 3){
+            if (pos.y < 0 && pl.id != 1) || (pos.y >= N && pl.id != 0) ||
+                (pos.x < 0 && pl.id != 2) || (pos.x >= N && pl.id != 3){
                     debug!("Attempted to move out of bounds");
                     return false
                 }
@@ -258,29 +261,30 @@ impl Game {
             }
 
             // Check for jumps
-            if !self.adj(p.p, pos) {
-                let (dx, dy) = (pos.0 - p.p.0, pos.1 - p.p.1);
+            if !self.adj(pl.p, pos) {
+                let (dx, dy) = (pos.x - pl.p.x, pos.y - pl.p.y);
 
                 if (dy.abs() == 2 && dx == 0) || (dy == 0 && dx.abs() == 2) {
                     // Linear jumps
-                    if self.get_player_at_position((pos.0-dx/2, pos.1-dy/2)).is_err()
-                        || !self.adj((pos.0-dx/2, pos.1-dy/2), (pos.0, pos.1))
-                        || !self.adj((pos.0-dx/2, pos.1-dy/2), (pos.0-dx, pos.1-dy)) {
+                    let them_pos = _p(pos.x-dx/2, pos.y-dy/2);
+                    if self.get_player_at_position(them_pos).is_err()
+                        || !self.adj(them_pos, _p(pos.x, pos.y))
+                        || !self.adj(them_pos, _p(pos.x-dx, pos.y-dy)) {
                             debug!("Invalid linear jump for {} from {:?} to {:?}",
-                                   name, p.p, pos);
+                                   name, pl.p, pos);
                             return false
                     }
 
                 } else if dx.abs() == 1 && dy.abs() == 1 {
                     // Corner Jumps
-                    if !((!self.adj((pos.0, p.p.1), (pos.0+dx, p.p.1))
-                          && self.adj((p.p.0, p.p.1), (pos.0, p.p.1))
-                          && self.adj((pos.0, pos.1), (pos.0, p.p.1)))
-                         || (!self.adj((p.p.0, pos.1), (p.p.0, pos.1+dy))
-                             && self.adj((p.p.0, p.p.1), (p.p.0, pos.1))
-                             && self.adj((pos.0, pos.1), (p.p.0, pos.1)))) {
+                    if !((!  self.adj(_p(pos.x, pl.p.y),     _p(pos.x+dx, pl.p.y))
+                          && self.adj(_p(pl.p.x, pl.p.y),    _p(pos.x, pl.p.y))
+                          && self.adj(_p(pos.x, pos.y),      _p(pos.x, pl.p.y)))
+                         || (!self.adj(_p(pl.p.x, pos.y),    _p(pl.p.x, pos.y+dy))
+                             && self.adj(_p(pl.p.x, pl.p.y), _p(pl.p.x, pos.y))
+                             && self.adj(_p(pos.x, pos.y),   _p(pl.p.x, pos.y)))) {
                         debug!("Invalid corner jump for {} from {:?} to {:?}",
-                               name, p.p, pos);
+                               name, pl.p, pos);
                         return false
                     }
 
@@ -294,7 +298,7 @@ impl Game {
         return true;
     }
 
-    pub fn move_player_to(&mut self, name: String, pos: (i32, i32))
+    pub fn move_player_to(&mut self, name: String, pos: Point)
                           -> Result<String, String>
     {
         if self.is_valid_move(name.clone(), pos) {
@@ -316,22 +320,22 @@ impl Game {
     pub fn move_player(&mut self, name: String, dir: String)
                        -> Result<String, String>
     {
-        let p = self.players[&name].p;
+        let n = self.players[&name].p;
         self.move_player_to(name, match &*dir {
-            "UP" => (p.0, p.1-1),
-            "DOWN" => (p.0, p.1+1),
-            "LEFT" => (p.0-1, p.1),
-            "RIGHT" => (p.0+1, p.1),
+            "UP"    => _p(n.x, n.y-1),
+            "DOWN"  => _p(n.x, n.y+1),
+            "LEFT"  => _p(n.x-1, n.y),
+            "RIGHT" => _p(n.x+1, n.y),
             _ => return Err(s("Unknown direction"))
         })
     }
 
     /// Check if there is a player at position (x, y)
-    pub fn get_player_at_position(&self, p: (i32, i32))
+    pub fn get_player_at_position(&self, p: Point)
                                   -> Result<String, String>
     {
         for (name, player) in self.players.iter() {
-            if player.p.0 == p.0 as i32 && player.p.1 == p.1 as i32 {
+            if player.p.x == p.x as i32 && player.p.y == p.y as i32 {
                 return Ok(name.clone());
             }
         }
@@ -350,15 +354,14 @@ impl Game {
         let mut board = "".to_string();
         let x = "+";
         board.push_str("  ");
-        for i in 0..N {
-            board.push_str(&*format!("{:4}", i)) };
+        for i in 0..N { board.push_str(&*format!("{:4}", i)) };
         board.push_str("\n");
 
         // Vertical iteration
         for j in 0..N  {
             board.push_str("   ");
             for i in 0..N  {
-                if self.adj((i, j), (i, j-1)){
+                if self.adj(_p(i, j), _p(i, j-1)){
                     board.push_str(&*format!("{}   ", x)) }
                 else { board.push_str(&*format!("{} - ", x)) }
             }
@@ -366,11 +369,11 @@ impl Game {
 
             // Horizontal iteration
             for i in 0..N {
-                let n = match self.get_player_at_position((i, j)) {
+                let n = match self.get_player_at_position(_p(i, j)) {
                     Ok(name) => format!("{}", self.players[&name].id),
                     Err(_) => s(" ")
                 };
-                if self.adj((i, j), (i-1, j)){
+                if self.adj(_p(i, j), _p(i-1, j)){
                     board.push_str(&*format!("  {} ", n)) }
                 else { board.push_str(&*format!("| {} ", n)) }
             }
@@ -470,13 +473,13 @@ impl Game {
 
     /// Calculate the length of the shorted path from given source point to
     /// all other points points on the board. This is O(n^2).
-    pub fn dijkstra(&self, src: (i32, i32)) -> Vec<i32>
+    pub fn dijkstra(&self, src: Point) -> Vec<i32>
     {
         let m = N + 2;
         let n = (m*m) as usize;
         let mut dist = vec![MAX_DIST; n];
         let mut spt_set = vec![false; n];
-        dist[(src.0+1+m*(src.1+1)) as usize] = 0;
+        dist[(src.x+1+m*(src.y+1)) as usize] = 0;
         for _ in 0..n {
             let mut min = MAX_DIST;
             let mut u = 0;
@@ -488,8 +491,8 @@ impl Game {
             }
             spt_set[u] = true;
             for v in 0..n {
-                let uu = (u as i32 % m, (u as i32) / m);
-                let vv = (v as i32 % m, (v as i32) / m);
+                let uu = _p(u as i32 % m, (u as i32) / m);
+                let vv = _p(v as i32 % m, (v as i32) / m);
                 let guv = match self.adj(uu, vv) { true => 1, false => 0 };
                 if !spt_set[v] && guv == 1 && dist[u] != MAX_DIST
                     && dist[u] + guv < dist[v] {
@@ -510,8 +513,8 @@ impl Game {
         for a in 0..n {
             for b in 0..n {
                 w[a][b] = self.adj(
-                    (a as i32 % m - 1, (a as i32) / m - 1),
-                    (b as i32 % m - 1, (b as i32) / m - 1))
+                    _p(a as i32 % m - 1, (a as i32) / m - 1),
+                    _p(b as i32 % m - 1, (b as i32) / m - 1))
             }
         }
         for k in 0..n {
@@ -526,33 +529,33 @@ impl Game {
 
     /// Test to see if points a and b are adjacent (you can move a
     /// piece from a to b).
-    pub fn adj(&self, a: (i32, i32), b: (i32, i32)) -> bool
+    pub fn adj(&self, a: Point, b: Point) -> bool
     {
         // Boundary conditions
-        if     a.0 < -1 || b.0 < -1 || a.1 < -1 || b.1 < -1
-            || a.1 > N || b.1 > N
-            || a.0 > N || b.0 > N {
+        if     a.x < -1 || b.x < -1 || a.y < -1 || b.y < -1
+            || a.y > N || b.y > N
+            || a.x > N || b.x > N {
             return false
         }
 
         // if points are not neighbors
-        if (a.0 - b.0).abs() > 1 || (a.1 - b.1).abs() > 1 ||
-           (a.0 - b.0).abs() + (a.1 - b.1).abs() == 2 {
+        if (a.x - b.x).abs() > 1 || (a.y - b.y).abs() > 1 ||
+           (a.x - b.x).abs() + (a.y - b.y).abs() == 2 {
             return false
         }
 
         // Endzones
-        if     ((a.1 == -1 || b.1 == -1) && (a.0 != b.0))
-            || ((a.0 == -1 || b.0 == -1) && (a.1 != b.1))
-            || ((a.1 == N || b.1 == N) && (a.0 != b.0))
-            || ((a.0 == N || b.0 == N) && (a.1 != b.1)) {
+        if     ((a.y == -1 || b.y == -1) && (a.x != b.x))
+            || ((a.x == -1 || b.x == -1) && (a.y != b.y))
+            || ((a.y == N || b.y == N) && (a.x != b.x))
+            || ((a.x == N || b.x == N) && (a.y != b.y)) {
                 return false
             }
 
         // Look for vertical wall
-        if a.1 == b.1 {
-            let x = cmp::max(a.0, b.0);
-            let y = a.1;
+        if a.y == b.y {
+            let x = cmp::max(a.x, b.x);
+            let y = a.y;
             let wall1 = Wall {d: Direction::Vertical, x: x, y: y};
             let wall2 = Wall {d: Direction::Vertical, x: x, y: y+1};
             if self.walls.contains(&wall1) || self.walls.contains(&wall2) {
@@ -561,9 +564,9 @@ impl Game {
         }
 
         // Look for horizontal wall
-        if a.0 == b.0 {
-            let x = a.0;
-            let y = cmp::max(a.1, b.1);
+        if a.x == b.x {
+            let x = a.x;
+            let y = cmp::max(a.y, b.y);
             let wall1 = Wall {d: Direction::Horizontal, x: x, y: y};
             let wall2 = Wall {d: Direction::Horizontal, x: x+1, y: y};
             if self.walls.contains(&wall1) || self.walls.contains(&wall2) {
@@ -587,7 +590,7 @@ impl Game {
         d.insert(s("size"), N.to_json());
         d.insert(s("walls"), walls.to_json());
         let mut players: Vec<Json> = vec![];
-        for (name, p) in self.players.iter() {
+        for (_, p) in self.players.iter() {
             players.push(p.to_json())
         }
         d.insert(s("players"), players.to_json());
@@ -597,14 +600,13 @@ impl Game {
     /// Return game from JSON
     pub fn from_json(doc: String) -> Game {
         let data = Json::from_str(&*doc).unwrap();
-        let size = data["size"].as_u64().unwrap() as i32;
         let mut game = Game::new();
         for player in data["players"].as_array().unwrap() {
             println!("player: {:?}", player);
             let name = player["name"].as_string().unwrap().to_string();
             game.players.insert(name.clone(), Player {
-                p: (player["position"][0].as_u64().unwrap() as i32,
-                    player["position"][1].as_u64().unwrap() as i32),
+                p: _p(player["position"][0].as_u64().unwrap() as i32,
+                      player["position"][1].as_u64().unwrap() as i32),
                 id: player["id"].as_u64().unwrap() as u8,
                 p_last: None,
                 key: "".to_string(),
