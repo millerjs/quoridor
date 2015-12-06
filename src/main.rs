@@ -45,6 +45,6 @@ fn main() {
     }
 
     // Start game server
-    listen(args[1].clone(), Game::new(9));
+    listen(args[1].clone(), Game::new());
 
 }

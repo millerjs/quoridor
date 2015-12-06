@@ -16,6 +16,7 @@ use std::cmp;
 const MAX_DIST: i32 = 100000;
 pub const GAME_OVER: i32 = -2;
 pub const GAME_NOT_STARTED: i32 = -2;
+pub const N: i32 = 9;
 
 pub fn s(string: &str) -> String {
     string.to_owned()
@@ -49,10 +50,18 @@ pub struct Wall {
     d: Direction,
 }
 
+pub struct Point {
+    x: i32,
+    y: i32,
+}
+
+trait OnBoard {
+    fn inbounds(&self) -> bool;
+}
+
 
 #[derive(Debug)]
 pub struct Game {
-    pub size: i32,
     pub walls: BTreeSet<Wall>,
     pub players: BTreeMap<String, Player>,
     pub turn: i32,
@@ -62,6 +71,19 @@ pub struct Game {
 pub enum Turn {
     PlaceWall(Wall),
     Move(i32, i32),
+}
+
+
+impl OnBoard for Point {
+    fn inbounds(&self) -> bool {
+        self.x >= 0 && self.x < N && self.y >= 0 && self.y < N
+    }
+}
+
+impl OnBoard for Wall {
+    fn inbounds(&self) -> bool {
+        self.x > 0 && self.x < N && self.y > 0 && self.y < N
+    }
 }
 
 impl Wall {
@@ -84,6 +106,10 @@ impl Wall {
             Err(s("Wall points must distance 2 away"))
         }
     }
+    pub fn from_points(a: Point, b: Point) -> Result<Wall, String> {
+        Wall::from_tuples((a.x, a.y), (b.x, b.y))
+    }
+
 }
 
 /***********************************************************************
@@ -91,6 +117,13 @@ impl Wall {
  ***********************************************************************/
 
 impl Player {
+    pub fn has_won(&self) -> bool {
+        return (self.id != 1 && self.p.1 < 0)
+            || (self.id != 2 && self.p.0 < 0)
+            || (self.id != 0 && self.p.1 >= N)
+            || (self.id != 3 && self.p.1 >= N)
+    }
+
     pub fn to_json(&self) -> Json {
         let mut d = BTreeMap::new();
         d.insert(s("position"), vec![self.p.0, self.p.1].to_json());
@@ -109,10 +142,9 @@ impl Player {
 impl Game {
 
     /// Creates a new game of size `size x size`
-    pub fn new(size: i32) -> Game
+    pub fn new() -> Game
     {
         Game {
-            size: size,
             players: BTreeMap::new(),
             walls:  BTreeSet::new(),
             turn: GAME_NOT_STARTED,
@@ -137,13 +169,7 @@ impl Game {
     {
         // Check if someone won
         for (_, p) in self.players.iter() {
-            if     (p.p.1 < 0 && p.id != 1)
-                || (p.p.1 >= self.size && p.id != 0)
-                || (p.p.0 < 0 && p.id != 2)
-                || (p.p.1 >= self.size && p.id != 3)
-            {
-                self.turn == GAME_OVER;
-            }
+            if p.has_won() { self.turn == GAME_OVER; }
         }
 
         self.turn = (self.turn + 1) % (self.players.len() as i32)
@@ -170,9 +196,9 @@ impl Game {
 
         // Create and add the player
         let i = self.players.len();
+        let starting_positions = [(N/2, 0), (N/2, N-1), (0, N/2), (N-1, N/2)];
         self.players.insert(name.clone(), Player {
-            p: [(self.size/2, 0), (self.size/2, self.size-1),
-                (0, self.size/2), (self.size-1, self.size/2)][i],
+            p: starting_positions[i],
             p_last: None,
             key: key,
             id: i as u8,
@@ -219,8 +245,8 @@ impl Game {
             let p = &self.players[&name];
 
             // Boundary checks
-            if (pos.1 < 0 && p.id != 1) || (pos.1 >= self.size && p.id != 0) ||
-                (pos.0 < 0 && p.id != 2) || (pos.0 >= self.size && p.id != 3){
+            if (pos.1 < 0 && p.id != 1) || (pos.1 >= N && p.id != 0) ||
+                (pos.0 < 0 && p.id != 2) || (pos.0 >= N && p.id != 3){
                     debug!("Attempted to move out of bounds");
                     return false
                 }
@@ -324,14 +350,14 @@ impl Game {
         let mut board = "".to_string();
         let x = "+";
         board.push_str("  ");
-        for i in -1..self.size + 1 {
+        for i in 0..N {
             board.push_str(&*format!("{:4}", i)) };
         board.push_str("\n");
 
         // Vertical iteration
-        for j in -1..self.size + 1 {
+        for j in 0..N  {
             board.push_str("   ");
-            for i in -1..self.size + 1 {
+            for i in 0..N  {
                 if self.adj((i, j), (i, j-1)){
                     board.push_str(&*format!("{}   ", x)) }
                 else { board.push_str(&*format!("{} - ", x)) }
@@ -339,7 +365,7 @@ impl Game {
             board.push_str(&*format!("+\n{:2} ", j));
 
             // Horizontal iteration
-            for i in -1..self.size + 1 {
+            for i in 0..N {
                 let n = match self.get_player_at_position((i, j)) {
                     Ok(name) => format!("{}", self.players[&name].id),
                     Err(_) => s(" ")
@@ -349,19 +375,18 @@ impl Game {
                 else { board.push_str(&*format!("| {} ", n)) }
             }
 
-            board.push_str("|\n");
+            board.push_str(" \n");
         }
         board.push_str("   ");
-        for _ in -1..self.size + 1 { board.push_str("+ - ") }
+        for _ in 0..N { board.push_str("+   ") }
         board.push_str("+\n");
         board
     }
 
     pub fn is_valid_wall(&mut self, wall: &Wall) -> Result<String, String>
     {
-        if  wall.x <= 0 || wall.x >= self.size ||
-            wall.y <= 0 || wall.y >= self.size {
-                return Err(s("Out of bounds"))
+        if !wall.inbounds() {
+            return Err(s("Out of bounds"))
         }
 
         if self.walls.contains(wall) {
@@ -389,14 +414,13 @@ impl Game {
         }
 
         self.walls.insert(*wall);
-
-        for name in self.players.keys() {
-            if !self.check_win_condition((*name).clone()) {
-                return Err(format!("Wall eliminates path for {}", name));
-            }
-        }
-
+        let win_conditions = self.players.keys().fold(
+            true, |v, i| v && self.check_win_condition(i.clone()));
         self.walls.remove(wall);
+
+        if !win_conditions {
+            return Err(s("Wall eliminates path"));
+        }
 
         return Ok(s("Valid wall"))
 
@@ -417,8 +441,7 @@ impl Game {
     pub fn add_wall_tuples(&mut self, a: (i32, i32), b: (i32, i32))
                            -> Result<String, String>
     {
-        let wall = Wall::from_tuples(a, b);
-        match wall {
+        match Wall::from_tuples(a, b) {
             Ok(w) => self.add_wall(&w),
             Err(w) => Err(format!("Invalid wall {:?}", w))
         }
@@ -431,15 +454,15 @@ impl Game {
     {
         let p = &self.players[&name];
         let d = self.dijkstra(p.p);
-        let m = self.size+2;
+        let m = N;
         match p.id {
-            0 => (1..self.size).fold(
-                false, |v, i| v || (d[(i+1+(self.size+1)*m) as usize]) < MAX_DIST),
-            1 => (1..self.size).fold(
+            0 => (1..N).fold(
+                false, |v, i| v || (d[(i+1+(N+1)*m) as usize]) < MAX_DIST),
+            1 => (1..N).fold(
                 false, |v, i| v || (d[((i+1)*m) as usize]) < MAX_DIST),
-            2 => (1..self.size).fold(
-                false, |v, i| v || (d[(self.size+1+(i+1)*m) as usize]) < MAX_DIST),
-            3 => (1..self.size).fold(
+            2 => (1..N).fold(
+                false, |v, i| v || (d[(N+1+(i+1)*m) as usize]) < MAX_DIST),
+            3 => (1..N).fold(
                 false, |v, i| v || (d[((i+1)*m) as usize]) < MAX_DIST),
             _ => false,
         }
@@ -449,12 +472,12 @@ impl Game {
     /// all other points points on the board. This is O(n^2).
     pub fn dijkstra(&self, src: (i32, i32)) -> Vec<i32>
     {
-        let m = self.size + 2;
+        let m = N + 2;
         let n = (m*m) as usize;
         let mut dist = vec![MAX_DIST; n];
         let mut spt_set = vec![false; n];
         dist[(src.0+1+m*(src.1+1)) as usize] = 0;
-        for _ in 0..n-1 {
+        for _ in 0..n {
             let mut min = MAX_DIST;
             let mut u = 0;
             for v in 0..n {
@@ -465,8 +488,8 @@ impl Game {
             }
             spt_set[u] = true;
             for v in 0..n {
-                let uu = (u as i32 % m - 1, (u as i32) / m - 1);
-                let vv = (v as i32 % m - 1, (v as i32) / m - 1);
+                let uu = (u as i32 % m, (u as i32) / m);
+                let vv = (v as i32 % m, (v as i32) / m);
                 let guv = match self.adj(uu, vv) { true => 1, false => 0 };
                 if !spt_set[v] && guv == 1 && dist[u] != MAX_DIST
                     && dist[u] + guv < dist[v] {
@@ -481,7 +504,7 @@ impl Game {
     /// points on the board. This is O(n^3).
     pub fn warshall(&self) -> Vec<Vec<bool>>
     {
-        let m = self.size + 2;
+        let m = N + 2;
         let n = (m*m) as usize;
         let mut w = vec![vec![false; n]; n];
         for a in 0..n {
@@ -507,8 +530,8 @@ impl Game {
     {
         // Boundary conditions
         if     a.0 < -1 || b.0 < -1 || a.1 < -1 || b.1 < -1
-            || a.1 > self.size || b.1 > self.size
-            || a.0 > self.size || b.0 > self.size {
+            || a.1 > N || b.1 > N
+            || a.0 > N || b.0 > N {
             return false
         }
 
@@ -521,8 +544,8 @@ impl Game {
         // Endzones
         if     ((a.1 == -1 || b.1 == -1) && (a.0 != b.0))
             || ((a.0 == -1 || b.0 == -1) && (a.1 != b.1))
-            || ((a.1 == self.size || b.1 == self.size) && (a.0 != b.0))
-            || ((a.0 == self.size || b.0 == self.size) && (a.1 != b.1)) {
+            || ((a.1 == N || b.1 == N) && (a.0 != b.0))
+            || ((a.0 == N || b.0 == N) && (a.1 != b.1)) {
                 return false
             }
 
@@ -561,7 +584,7 @@ impl Game {
             walls.push(vec![vec![a.0, a.1], vec![b.0, b.1]])
         }
         d.insert(s("turn"), self.turn.to_json());
-        d.insert(s("size"), self.size.to_json());
+        d.insert(s("size"), N.to_json());
         d.insert(s("walls"), walls.to_json());
         let mut players: Vec<Json> = vec![];
         for (name, p) in self.players.iter() {
@@ -575,7 +598,7 @@ impl Game {
     pub fn from_json(doc: String) -> Game {
         let data = Json::from_str(&*doc).unwrap();
         let size = data["size"].as_u64().unwrap() as i32;
-        let mut game = Game::new(size);
+        let mut game = Game::new();
         for player in data["players"].as_array().unwrap() {
             println!("player: {:?}", player);
             let name = player["name"].as_string().unwrap().to_string();
