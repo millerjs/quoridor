@@ -89,16 +89,25 @@ impl OnBoard for Wall {
 }
 
 impl Wall {
+
+    pub fn shift(&self, x: i32, y: i32) -> Wall {
+        Wall { x: self.x + x, y: self.y + y, ..*self }
+    }
+
+    pub fn rotate(&self) -> Wall {
+        Wall { d: match self.d {
+            Direction::Vertical   => Direction::Horizontal,
+            Direction::Horizontal => Direction::Vertical,
+        }, ..*self}
+    }
+
     pub fn to_tuples(&self) -> ((i32, i32), (i32, i32)) {
         match self.d {
-            Direction::Vertical => {
-                ((self.x, self.y-1), (self.x, self.y+1))
-            }
-            Direction::Horizontal => {
-                ((self.x-1, self.y), (self.x+1, self.y))
-            }
+            Direction::Vertical   => {((self.x, self.y-1), (self.x, self.y+1))}
+            Direction::Horizontal => {((self.x-1, self.y), (self.x+1, self.y))}
         }
     }
+
     pub fn from_tuples(a: (i32, i32), b: (i32, i32)) -> Result<Wall, String> {
         if a.1 == b.1 && (a.0 - b.0).abs() == 2 {
             Ok(Wall { x: (a.0+b.0)/2, y: a.1, d: Direction::Horizontal})
@@ -108,6 +117,7 @@ impl Wall {
             Err(s("Wall points must distance 2 away"))
         }
     }
+
     pub fn from_points(a: Point, b: Point) -> Result<Wall, String> {
         Wall::from_tuples((a.x, a.y), (b.x, b.y))
     }
@@ -382,46 +392,48 @@ impl Game {
         board
     }
 
-    pub fn is_valid_wall(&mut self, wall: &Wall) -> Result<String, String>
+    pub fn is_valid_wall(&mut self, wall: &Wall) -> bool
     {
         if !wall.inbounds() {
-            return Err(s("Out of bounds"))
+            debug!("Out of bounds");
+            return false
         }
 
         if self.walls.contains(wall) {
-            return Err(s("Wall already exists"))
+            debug!("Wall exists");
+            return false
         }
 
         if wall.d == Direction::Vertical {
-            let rot = Wall { d: Direction::Horizontal, x: wall.x, y: wall.y };
-            let shift_down = Wall { d: wall.d, x: wall.x, y: wall.y-1};
-            let shift_up  =  Wall { d: wall.d, x: wall.x, y: wall.y+1};
-            if self.walls.contains(&rot)
-                || self.walls.contains(&shift_up)
-                || self.walls.contains(&shift_down) {
-                    return Err(s("Wall collision"))
-            }
+            // Check vertical collisions
+            if self.walls.contains(&wall.rotate())
+                || self.walls.contains(&wall.shift(0, -1))
+                || self.walls.contains(&wall.shift(0,  1)) {
+                    debug!("Vertical wall collision");
+                    return false
+                }
         } else {
-            let rot = Wall { d: Direction::Vertical, x: wall.x, y: wall.y };
-            let shift_left  = Wall { d: wall.d, x: wall.x-1, y: wall.y};
-            let shift_right = Wall { d: wall.d, x: wall.x+1, y: wall.y};
-            if self.walls.contains(&rot)
-                || self.walls.contains(&shift_left)
-                || self.walls.contains(&shift_right) {
-                    return Err(s("Wall collision"))
-            }
+            // Check horizontal collisions
+            if self.walls.contains(&wall.rotate())
+                || self.walls.contains(&wall.shift(-1, 0))
+                || self.walls.contains(&wall.shift( 1, 0)) {
+                    debug!("Horizontal wall collision");
+                    return false
+                }
         }
 
+        // Check each player has a path
         self.walls.insert(*wall);
         let win_conditions = self.players.keys().fold(
             true, |v, i| v && self.check_win_condition(i.clone()));
         self.walls.remove(wall);
 
         if !win_conditions {
-            return Err(s("Wall eliminates path"));
+            debug!("Wall eliminates path");
+            return false;
         }
 
-        return Ok(s("Valid wall"))
+        return true;
 
     }
 
@@ -432,8 +444,8 @@ impl Game {
     pub fn add_wall(&mut self, wall: &Wall) -> Result<String, String>
     {
         match self.is_valid_wall(wall) {
-            Ok(r) => {self.walls.insert(*wall); Ok(r)},
-            Err(r) => Err(r)
+            true  => {self.walls.insert(*wall); Ok(s("Added wall."))},
+            false => Err(s("Invalid wall."))
         }
     }
 
@@ -441,7 +453,7 @@ impl Game {
                            -> Result<String, String>
     {
         match Wall::from_tuples(a, b) {
-            Ok(w) => self.add_wall(&w),
+            Ok(w)  => self.add_wall(&w),
             Err(w) => Err(format!("Invalid wall {:?}", w))
         }
     }
@@ -545,10 +557,9 @@ impl Game {
 
         // Look for vertical wall
         if a.y == b.y {
-            let x = cmp::max(a.x, b.x);
-            let y = a.y;
+            let (x, y) = (cmp::max(a.x, b.x), a.y);
             let wall1 = Wall {d: Direction::Vertical, x: x, y: y};
-            let wall2 = Wall {d: Direction::Vertical, x: x, y: y+1};
+            let wall2 = wall1.shift(0, 1);
             if self.walls.contains(&wall1) || self.walls.contains(&wall2) {
                 return false
             }
@@ -556,10 +567,9 @@ impl Game {
 
         // Look for horizontal wall
         if a.x == b.x {
-            let x = a.x;
-            let y = cmp::max(a.y, b.y);
+            let (x, y) = (a.x, cmp::max(a.y, b.y));
             let wall1 = Wall {d: Direction::Horizontal, x: x, y: y};
-            let wall2 = Wall {d: Direction::Horizontal, x: x+1, y: y};
+            let wall2 = wall1.shift(1, 0);
             if self.walls.contains(&wall1) || self.walls.contains(&wall2) {
                 return false
             }
