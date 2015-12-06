@@ -168,7 +168,5 @@ fn test_end_game() {
     for _ in 0..N-1 {
         assert!(g.move_player(s("Player 1"), s("DOWN")).is_ok());
     }
-    assert!(g.move_player(s("Player 1"), s("DOWN")).is_ok());
-    assert_eq!(g.turn, GAME_OVER);
     assert!(g.move_player(s("Player 1"), s("DOWN")).is_err());
 }

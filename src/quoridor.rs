@@ -239,61 +239,52 @@ impl Game {
         };
     }
 
-    pub fn is_valid_move(&mut self, name: String, pos: Point) -> bool
+    pub fn is_valid_move(&mut self, start: Point, end: Point) -> bool
     {
-        if !self.players.contains_key(&name) {
-            debug!("Player not found.");
+        // Boundary checks
+        if !end.inbounds() {
+            debug!("Attempted to move out of bounds");
             return false
-        } else {
-            let pl = &self.players[&name];
+        }
 
-            // Boundary checks
-            if (pos.y < 0 && pl.id != 1) || (pos.y >= N && pl.id != 0) ||
-                (pos.x < 0 && pl.id != 2) || (pos.x >= N && pl.id != 3){
-                    debug!("Attempted to move out of bounds");
-                    return false
-                }
+        // Check enditi
+        if self.get_player_at_position(end).is_ok() {
+            debug!("Position is not empty");
+            return false
+        }
 
-            // Check position
-            if self.get_player_at_position(pos).is_ok() {
-                debug!("Position is not empty");
-                return false
-            }
+        // Check for jumps
+        if !self.adj(start, end) {
+            let (dx, dy) = (end.x - start.x, end.y - start.y);
 
-            // Check for jumps
-            if !self.adj(pl.p, pos) {
-                let (dx, dy) = (pos.x - pl.p.x, pos.y - pl.p.y);
-
-                if (dy.abs() == 2 && dx == 0) || (dy == 0 && dx.abs() == 2) {
-                    // Linear jumps
-                    let them_pos = _p(pos.x-dx/2, pos.y-dy/2);
-                    if self.get_player_at_position(them_pos).is_err()
-                        || !self.adj(them_pos, _p(pos.x, pos.y))
-                        || !self.adj(them_pos, _p(pos.x-dx, pos.y-dy)) {
-                            debug!("Invalid linear jump for {} from {:?} to {:?}",
-                                   name, pl.p, pos);
-                            return false
-                    }
-
-                } else if dx.abs() == 1 && dy.abs() == 1 {
-                    // Corner Jumps
-                    if !((!  self.adj(_p(pos.x, pl.p.y),     _p(pos.x+dx, pl.p.y))
-                          && self.adj(_p(pl.p.x, pl.p.y),    _p(pos.x, pl.p.y))
-                          && self.adj(_p(pos.x, pos.y),      _p(pos.x, pl.p.y)))
-                         || (!self.adj(_p(pl.p.x, pos.y),    _p(pl.p.x, pos.y+dy))
-                             && self.adj(_p(pl.p.x, pl.p.y), _p(pl.p.x, pos.y))
-                             && self.adj(_p(pos.x, pos.y),   _p(pl.p.x, pos.y)))) {
-                        debug!("Invalid corner jump for {} from {:?} to {:?}",
-                               name, pl.p, pos);
+            if (dy.abs() == 2 && dx == 0) || (dy == 0 && dx.abs() == 2) {
+                // Linear jumps
+                let them_end = _p(end.x-dx/2, end.y-dy/2);
+                if self.get_player_at_position(them_end).is_err()
+                    || !self.adj(them_end, _p(end.x, end.y))
+                    || !self.adj(them_end, _p(end.x-dx, end.y-dy)) {
+                        debug!("Invalid linear jump {:?} to {:?}", start, end);
                         return false
                     }
 
-                } else {
-                    debug!("Cannot move player {} to {:?}", name, pos);
+            } else if dx.abs() == 1 && dy.abs() == 1 {
+                // Corner Jumps
+                if !((! self.adj(_p(end.x, start.y), _p(end.x+dx, start.y))
+                      && self.adj(_p(start.x, start.y), _p(end.x, start.y))
+                      && self.adj(_p(end.x, end.y), _p(end.x, start.y)))
+                     || (! self.adj(_p(start.x, end.y), _p(start.x, end.y+dy))
+                         && self.adj(_p(start.x, start.y), _p(start.x, end.y))
+                         && self.adj(_p(end.x, end.y), _p(start.x, end.y)))){
+                    debug!("Invalid corner jump {:?} to {:?}", start, end);
                     return false
                 }
+
+            } else {
+                debug!("Cannot move player from {:?} to {:?}", start, end);
+                return false
             }
         }
+
         // If we made it here, then the move is valid.
         return true;
     }
@@ -301,7 +292,12 @@ impl Game {
     pub fn move_player_to(&mut self, name: String, pos: Point)
                           -> Result<String, String>
     {
-        if self.is_valid_move(name.clone(), pos) {
+        if !self.players.contains_key(&name) {
+            return Err(s("Player not found."))
+        }
+
+        let start = self.players[&name].p;
+        if self.is_valid_move(start, pos) {
             if let Some(p) = self.players.get_mut(&name) {
                 p.p_last = Some(p.p);
                 p.p = pos;
@@ -320,12 +316,12 @@ impl Game {
     pub fn move_player(&mut self, name: String, dir: String)
                        -> Result<String, String>
     {
-        let n = self.players[&name].p;
+        let p = self.players[&name].p;
         self.move_player_to(name, match &*dir {
-            "UP"    => _p(n.x, n.y-1),
-            "DOWN"  => _p(n.x, n.y+1),
-            "LEFT"  => _p(n.x-1, n.y),
-            "RIGHT" => _p(n.x+1, n.y),
+            "UP"    => _p(p.x, p.y-1),
+            "DOWN"  => _p(p.x, p.y+1),
+            "LEFT"  => _p(p.x-1, p.y),
+            "RIGHT" => _p(p.x+1, p.y),
             _ => return Err(s("Unknown direction"))
         })
     }
@@ -531,12 +527,7 @@ impl Game {
     /// piece from a to b).
     pub fn adj(&self, a: Point, b: Point) -> bool
     {
-        // Boundary conditions
-        if     a.x < -1 || b.x < -1 || a.y < -1 || b.y < -1
-            || a.y > N || b.y > N
-            || a.x > N || b.x > N {
-            return false
-        }
+        if !a.inbounds() || !b.inbounds() { return false }
 
         // if points are not neighbors
         if (a.x - b.x).abs() > 1 || (a.y - b.y).abs() > 1 ||
