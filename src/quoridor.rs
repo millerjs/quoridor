@@ -75,20 +75,22 @@ pub enum Turn {
 pub fn _p(x: i32, y: i32) -> Point { Point{x: x, y: y} }
 
 
-impl OnBoard for Point {
+impl Point {
     fn inbounds(&self) -> bool {
         self.x >= 0 && self.x < N && self.y >= 0 && self.y < N
     }
-}
 
-
-impl OnBoard for Wall {
-    fn inbounds(&self) -> bool {
-        self.x > 0 && self.x < N && self.y > 0 && self.y < N
+    fn neighbors(&self, other: Point) -> bool {
+        ((self.x - other.x).abs() == 0 && (self.y - other.y).abs() == 1) ||
+            ((self.y - other.y).abs() == 0 && (self.x - other.x).abs() == 1)
     }
 }
 
+
 impl Wall {
+    fn inbounds(&self) -> bool {
+        self.x > 0 && self.x < N && self.y > 0 && self.y < N
+    }
 
     pub fn shift(&self, x: i32, y: i32) -> Wall {
         Wall { x: self.x + x, y: self.y + y, ..*self }
@@ -539,39 +541,37 @@ impl Game {
     /// piece from a to b).
     pub fn adj(&self, a: Point, b: Point) -> bool
     {
-        if !a.inbounds() || !b.inbounds() { return false }
-
-        // if points are not neighbors
-        if (a.x - b.x).abs() > 1 || (a.y - b.y).abs() > 1 ||
-           (a.x - b.x).abs() + (a.y - b.y).abs() == 2 {
+        if !a.inbounds() || !b.inbounds() {
             return false
         }
 
-        // Endzones
-        if     ((a.y == -1 || b.y == -1) && (a.x != b.x))
-            || ((a.x == -1 || b.x == -1) && (a.y != b.y))
-            || ((a.y == N || b.y == N) && (a.x != b.x))
-            || ((a.x == N || b.x == N) && (a.y != b.y)) {
-                return false
-            }
+        if !a.neighbors(b) {
+            return false
+        }
 
         // Look for vertical wall
         if a.y == b.y {
-            let (x, y) = (cmp::max(a.x, b.x), a.y);
-            let wall1 = Wall {d: Direction::Vertical, x: x, y: y};
-            let wall2 = wall1.shift(0, 1);
-            if self.walls.contains(&wall1) || self.walls.contains(&wall2) {
-                return false
+            let wall = Wall {
+                d: Direction::Vertical,
+                x: cmp::max(a.x, b.x),
+                y: a.y
+            };
+            if self.walls.contains(&wall)
+                || self.walls.contains(&wall.shift(0, 1)) {
+                    return false
             }
         }
 
         // Look for horizontal wall
         if a.x == b.x {
-            let (x, y) = (a.x, cmp::max(a.y, b.y));
-            let wall1 = Wall {d: Direction::Horizontal, x: x, y: y};
-            let wall2 = wall1.shift(1, 0);
-            if self.walls.contains(&wall1) || self.walls.contains(&wall2) {
-                return false
+            let wall = Wall {
+                d: Direction::Horizontal,
+                x: a.x,
+                y: cmp::max(a.y, b.y),
+            };
+            if self.walls.contains(&wall)
+                || self.walls.contains(&wall.shift(1, 0)) {
+                    return false
             }
         }
 
