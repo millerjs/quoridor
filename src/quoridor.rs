@@ -41,17 +41,19 @@ pub enum Direction {
     Vertical,
 }
 
-#[derive(Debug,PartialOrd,Ord,PartialEq,Eq,Copy,Clone)]
-pub struct Wall {
-    x: i32,
-    y: i32,
-    d: Direction,
-}
 
 #[derive(Debug,PartialOrd,Ord,PartialEq,Eq,Copy,Clone)]
 pub struct Point {
     x: i32,
     y: i32,
+}
+
+
+#[derive(Debug,PartialOrd,Ord,PartialEq,Eq,Copy,Clone)]
+pub struct Wall {
+    x: i32,
+    y: i32,
+    d: Direction,
 }
 
 trait OnBoard {
@@ -88,6 +90,15 @@ impl Point {
 
 
 impl Wall {
+
+    fn horizontal(x: i32, y: i32) -> Wall {
+        Wall { d: Direction::Horizontal, x: x, y: y }
+    }
+
+    fn vertical(x: i32, y: i32) -> Wall {
+        Wall { d: Direction::Vertical, x: x, y: y }
+    }
+
     fn inbounds(&self) -> bool {
         self.x > 0 && self.x < N && self.y > 0 && self.y < N
     }
@@ -112,9 +123,9 @@ impl Wall {
 
     pub fn from_tuples(a: (i32, i32), b: (i32, i32)) -> Result<Wall, String> {
         if a.1 == b.1 && (a.0 - b.0).abs() == 2 {
-            Ok(Wall { x: (a.0+b.0)/2, y: a.1, d: Direction::Horizontal})
+            Ok(Wall::horizontal((a.0+b.0)/2, a.1))
         } else if a.0 == b.0 && (a.1 - b.1).abs() == 2 {
-            Ok(Wall { x: a.0, y: (a.1+b.1)/2, d: Direction::Vertical})
+            Ok(Wall::vertical(a.0, (a.1+b.1)/2))
         } else {
             Err(s("Wall points must distance 2 away"))
         }
@@ -259,7 +270,7 @@ impl Game {
             return false
         }
 
-        // Check enditi
+        // Check empty
         if self.get_player_at_position(end).is_ok() {
             debug!("Position is not empty");
             return false
@@ -271,10 +282,10 @@ impl Game {
 
             if (dy.abs() == 2 && dx == 0) || (dy == 0 && dx.abs() == 2) {
                 // Linear jumps
-                let them_end = _p(end.x-dx/2, end.y-dy/2);
-                if self.get_player_at_position(them_end).is_err()
-                    || !self.adj(them_end, _p(end.x, end.y))
-                    || !self.adj(them_end, _p(end.x-dx, end.y-dy)) {
+                let them_pos = _p(end.x-dx/2, end.y-dy/2);
+                if self.get_player_at_position(them_pos).is_err()
+                    || !self.adj(them_pos, _p(end.x, end.y))
+                    || !self.adj(them_pos, _p(end.x-dx, end.y-dy)) {
                         debug!("Invalid linear jump {:?} to {:?}", start, end);
                         return false
                     }
@@ -343,7 +354,7 @@ impl Game {
                                   -> Result<String, String>
     {
         for (name, player) in self.players.iter() {
-            if player.p.x == p.x as i32 && player.p.y == p.y as i32 {
+            if player.p == p {
                 return Ok(name.clone());
             }
         }
@@ -354,44 +365,6 @@ impl Game {
     pub fn print(&self)
     {
         println!("{}", self.to_string());
-    }
-
-    /// Construct ASCII representation
-    pub fn to_string(&self) -> String
-    {
-        let mut board = "".to_string();
-        let x = "+";
-        board.push_str("  ");
-        for i in 0..N { board.push_str(&*format!("{:4}", i)) };
-        board.push_str("\n");
-
-        // Vertical iteration
-        for j in 0..N  {
-            board.push_str("   ");
-            for i in 0..N  {
-                if self.adj(_p(i, j), _p(i, j-1)){
-                    board.push_str(&*format!("{}   ", x)) }
-                else { board.push_str(&*format!("{} - ", x)) }
-            }
-            board.push_str(&*format!("+\n{:2} ", j));
-
-            // Horizontal iteration
-            for i in 0..N {
-                let n = match self.get_player_at_position(_p(i, j)) {
-                    Ok(name) => format!("{}", self.players[&name].id),
-                    Err(_) => s(" ")
-                };
-                if self.adj(_p(i, j), _p(i-1, j)){
-                    board.push_str(&*format!("  {} ", n)) }
-                else { board.push_str(&*format!("| {} ", n)) }
-            }
-
-            board.push_str(" \n");
-        }
-        board.push_str("   ");
-        for _ in 0..N { board.push_str("+   ") }
-        board.push_str("+\n");
-        board
     }
 
     pub fn is_valid_wall(&mut self, wall: &Wall) -> bool
@@ -551,31 +524,61 @@ impl Game {
 
         // Look for vertical wall
         if a.y == b.y {
-            let wall = Wall {
-                d: Direction::Vertical,
-                x: cmp::max(a.x, b.x),
-                y: a.y
-            };
-            if self.walls.contains(&wall)
-                || self.walls.contains(&wall.shift(0, 1)) {
+            let test_wall = Wall::vertical(cmp::max(a.x, b.x), a.y);
+            if self.walls.contains(&test_wall)
+                || self.walls.contains(&test_wall.shift(0, 1)) {
                     return false
             }
         }
 
         // Look for horizontal wall
         if a.x == b.x {
-            let wall = Wall {
-                d: Direction::Horizontal,
-                x: a.x,
-                y: cmp::max(a.y, b.y),
-            };
-            if self.walls.contains(&wall)
-                || self.walls.contains(&wall.shift(1, 0)) {
+            let test_wall = Wall::horizontal(a.x, cmp::max(a.y, b.y));
+            if self.walls.contains(&test_wall)
+                || self.walls.contains(&test_wall.shift(1, 0)) {
                     return false
             }
         }
 
         return true;
+    }
+
+    /// Construct ASCII representation
+    pub fn to_string(&self) -> String
+    {
+        let mut board = "".to_string();
+        let x = "+";
+        board.push_str("  ");
+        for i in 0..N { board.push_str(&*format!("{:4}", i)) };
+        board.push_str("\n");
+
+        // Vertical iteration
+        for j in 0..N  {
+            board.push_str("   ");
+            for i in 0..N  {
+                if self.adj(_p(i, j), _p(i, j-1)){
+                    board.push_str(&*format!("{}   ", x)) }
+                else { board.push_str(&*format!("{} - ", x)) }
+            }
+            board.push_str(&*format!("+\n{:2} ", j));
+
+            // Horizontal iteration
+            for i in 0..N {
+                let n = match self.get_player_at_position(_p(i, j)) {
+                    Ok(name) => format!("{}", self.players[&name].id),
+                    Err(_) => s(" ")
+                };
+                if self.adj(_p(i, j), _p(i-1, j)){
+                    board.push_str(&*format!("  {} ", n)) }
+                else { board.push_str(&*format!("| {} ", n)) }
+            }
+
+            board.push_str("|\n");
+        }
+        board.push_str("   ");
+        for _ in 0..N { board.push_str("+ - ") }
+        board.push_str("+\n");
+        board
     }
 
     /// Return the game state as JSON
