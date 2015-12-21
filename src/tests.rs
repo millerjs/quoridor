@@ -144,7 +144,7 @@ fn test_move_player() {
     let mut g = Game::new();
     assert!(g.add_player(s("Player 1"), s("a")).is_ok());
     assert!(g.move_player(s("Player 1"), s("UP")).is_err());
-    assert!(g.move_player(s("Player 1"), s("DOWN")).is_ok());
+    assert!(g.move_player(s("Player 1"), s("down")).is_ok());
     assert_eq!(g.players[&s("Player 1")].p,  _p(4, 1));
     assert!(g.move_player(s("Player 1"), s("LEFT")).is_ok());
     assert_eq!(g.players[&s("Player 1")].p,  _p(3, 1));
