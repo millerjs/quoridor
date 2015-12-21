@@ -340,7 +340,7 @@ impl Game {
                        -> Result<String, String>
     {
         let p = self.players[&name].p;
-        self.move_player_to(name, match &*dir {
+        self.move_player_to(name, match &*dir.to_uppercase() {
             "UP"    => _p(p.x, p.y-1),
             "DOWN"  => _p(p.x, p.y+1),
             "LEFT"  => _p(p.x-1, p.y),
