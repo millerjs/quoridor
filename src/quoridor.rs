@@ -9,8 +9,9 @@
 use rustc_serialize::json::Json;
 use rustc_serialize::json::ToJson;
 use std::borrow::ToOwned;
+use std::collections::HashMap;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::cmp;
 
 const MAX_DIST: i32 = 100000;
@@ -35,21 +36,21 @@ pub struct Player {
     pub name: String,
 }
 
-#[derive(Debug,PartialOrd,Ord,PartialEq,Eq,Copy,Clone)]
+#[derive(Hash,Debug,PartialOrd,Ord,PartialEq,Eq,Copy,Clone)]
 pub enum Direction {
     Horizontal,
     Vertical,
 }
 
 
-#[derive(Debug,PartialOrd,Ord,PartialEq,Eq,Copy,Clone)]
+#[derive(Hash,Debug,PartialOrd,Ord,PartialEq,Eq,Copy,Clone)]
 pub struct Point {
     x: i32,
     y: i32,
 }
 
 
-#[derive(Debug,PartialOrd,Ord,PartialEq,Eq,Copy,Clone)]
+#[derive(Hash,Debug,PartialOrd,Ord,PartialEq,Eq,Copy,Clone)]
 pub struct Wall {
     x: i32,
     y: i32,
@@ -63,8 +64,8 @@ trait OnBoard {
 
 #[derive(Debug)]
 pub struct Game {
-    pub walls: BTreeSet<Wall>,
-    pub players: BTreeMap<String, Player>,
+    pub walls: HashSet<Wall>,
+    pub players: HashMap<String, Player>,
     pub turn: i32,
 }
 
@@ -170,8 +171,8 @@ impl Game {
     pub fn new() -> Game
     {
         Game {
-            players: BTreeMap::new(),
-            walls:  BTreeSet::new(),
+            players: HashMap::new(),
+            walls:  HashSet::new(),
             turn: GAME_NOT_STARTED,
         }
     }
