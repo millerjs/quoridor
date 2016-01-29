@@ -97,14 +97,14 @@ fn test_adj_1() {
     let g = Game::new();
     for i in 0..N {
         for j in 0..N {
-            assert!(!g.adj(_p(i, j), _p(i+2, j)));
-            assert!(!g.adj(_p(i, j), _p(i-2, j)));
-            assert!(!g.adj(_p(i, j), _p(i, j+2)));
-            assert!(!g.adj(_p(i, j), _p(i, j-2)));
-            assert!(!g.adj(_p(i, j), _p(i-1, j-1)));
-            assert!(!g.adj(_p(i, j), _p(i+1, j+1)));
-            assert!(!g.adj(_p(i, j), _p(i-1, j+1)));
-            assert!(!g.adj(_p(i, j), _p(i+1, j-1)));
+            assert!(!g.adj(_p(i, j), _p(i+2, j)).is_ok());
+            assert!(!g.adj(_p(i, j), _p(i-2, j)).is_ok());
+            assert!(!g.adj(_p(i, j), _p(i, j+2)).is_ok());
+            assert!(!g.adj(_p(i, j), _p(i, j-2)).is_ok());
+            assert!(!g.adj(_p(i, j), _p(i-1, j-1)).is_ok());
+            assert!(!g.adj(_p(i, j), _p(i+1, j+1)).is_ok());
+            assert!(!g.adj(_p(i, j), _p(i-1, j+1)).is_ok());
+            assert!(!g.adj(_p(i, j), _p(i+1, j-1)).is_ok());
         }
     }
 }
@@ -112,23 +112,23 @@ fn test_adj_1() {
 #[test]
 fn test_adj_vertical_1() {
     let mut g = Game::new();
-    assert!(g.adj(_p(1, 1), _p(2, 1)));
+    assert!(g.adj(_p(1, 1), _p(2, 1)).is_ok());
     assert!(g.add_wall_tuples((2, 1), (2, 3)).is_ok());
-    assert!(!g.adj(_p(1, 1), _p(2, 1)));
-    assert!(!g.adj(_p(1, 2), _p(2, 2)));
-    assert!(!g.adj(_p(2, 1), _p(1, 1)));
-    assert!(!g.adj(_p(2, 2), _p(1, 2)));
+    assert!(!g.adj(_p(1, 1), _p(2, 1)).is_ok());
+    assert!(!g.adj(_p(1, 2), _p(2, 2)).is_ok());
+    assert!(!g.adj(_p(2, 1), _p(1, 1)).is_ok());
+    assert!(!g.adj(_p(2, 2), _p(1, 2)).is_ok());
 }
 
 #[test]
 fn test_adj_horizontal_1() {
     let mut g = Game::new();
-    assert!(g.adj(_p(1, 1), _p(1, 2)));
+    assert!(g.adj(_p(1, 1), _p(1, 2)).is_ok());
     assert!(g.add_wall_tuples((1, 2), (3, 2)).is_ok());
-    assert!(!g.adj(_p(1, 1), _p(1, 2)));
-    assert!(!g.adj(_p(2, 1), _p(2, 2)));
-    assert!(!g.adj(_p(1, 2), _p(1, 1)));
-    assert!(!g.adj(_p(2, 2), _p(2, 1)));
+    assert!(!g.adj(_p(1, 1), _p(1, 2)).is_ok());
+    assert!(!g.adj(_p(2, 1), _p(2, 2)).is_ok());
+    assert!(!g.adj(_p(1, 2), _p(1, 1)).is_ok());
+    assert!(!g.adj(_p(2, 2), _p(2, 1)).is_ok());
 }
 
 #[test]

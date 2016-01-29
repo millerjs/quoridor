@@ -1,10 +1,7 @@
-/***********************************************************************
- * Quoridor game server
- *
- * author: Joshua Miller
- * email: jshuasmiller@gmail.com
- *
- ***********************************************************************/
+//! Quoridor game server
+//!
+//! author: Joshua Miller
+//! email: jsmiller@uchicago.edu
 
 use router::Router;
 use iron::status;
@@ -24,10 +21,6 @@ use quoridor::Wall;
 use quoridor::_p;
 use quoridor::GAME_OVER;
 use quoridor::GAME_NOT_STARTED;
-
-/***********************************************************************
- * Structs which define post request bodies
- ***********************************************************************/
 
 #[derive(RustcDecodable, RustcEncodable, Debug)]
 struct PlayerRegistrationRequest {
@@ -57,10 +50,6 @@ struct WallRequest {
     p2: [i32; 2],
 }
 
-/***********************************************************************
- * Macros for registering router endpoints
- ***********************************************************************/
-
 macro_rules! register_post_route {
     ($router: expr, $route: expr, $handler: expr, $game: expr) => {
         {
@@ -70,7 +59,6 @@ macro_rules! register_post_route {
         }
     };
 }
-
 
 macro_rules! register_turn_route {
     ($router: expr, $cond: expr, $route: expr, $handler: expr, $game: expr) => {
@@ -103,9 +91,8 @@ macro_rules! register_get_route {
     };
 }
 
-/***********************************************************************
- * Macros for parsing JSON bodies and calling mutation functions
- ***********************************************************************/
+// ======================================================================
+// Macros for parsing JSON bodies and calling mutation functions
 
 macro_rules! parse_payload {
     ($request: expr) => {
@@ -176,64 +163,69 @@ macro_rules! check_player {
     };
 }
 
-/***********************************************************************
- * Handlers for API endpoints
- ***********************************************************************/
+/// *********************************************************************
+/// Handlers for API endpoints
+/// ********************************************************************
 
-fn get_status(_: &mut Request, game: &Game) -> IronResult<Response>
-{
+fn get_status(request: &mut Request, game: &Game) -> IronResult<Response> {
+    println!("{:?}", request);
     let payload = game.to_json().to_string();
     Ok(Response::with((status::Ok, payload)))
 }
 
 
-fn get_ascii(_: &mut Request, game: &Game) -> IronResult<Response>
-{
+fn get_ascii(request: &mut Request, game: &Game) -> IronResult<Response> {
+    println!("{:?}", request);
     let payload = game.to_string();
     Ok(Response::with((status::Ok, payload)))
 }
 
 
-fn register_player(request: &mut Request, game: &mut Game) -> IronResult<Response>
-{
+fn register_player(request: &mut Request, game: &mut Game) -> IronResult<Response> {
+    println!("{:?}", request);
     let data: PlayerRegistrationRequest = parse_payload!(request);
     try_call!(game, game.add_player(data.name, data.key))
 }
 
-fn move_player_to(request: &mut Request, game: &mut Game) -> IronResult<Response>
-{
+fn move_player_to(request: &mut Request, game: &mut Game) -> IronResult<Response> {
+    println!("{:?}", request);
     let data: PlayerMoveToRequest = parse_payload!(request);
-    take_turn!(game, data.name, data.key, game.move_player_to(
-        data.name, _p(data.position[0], data.position[1])))
+    take_turn!(game,
+               data.name,
+               data.key,
+               game.move_player_to(data.name, _p(data.position[0], data.position[1])))
 }
 
-fn move_player(request: &mut Request, game: &mut Game) -> IronResult<Response>
-{
+fn move_player(request: &mut Request, game: &mut Game) -> IronResult<Response> {
+    println!("{:?}", request);
     let data: PlayerMoveRequest = parse_payload!(request);
-    take_turn!(game, data.name, data.key,
-              game.move_player(data.name, data.direction))
+    take_turn!(game,
+               data.name,
+               data.key,
+               game.move_player(data.name, data.direction))
 }
 
-fn place_wall(request: &mut Request, game: &mut Game) -> IronResult<Response>
-{
+fn place_wall(request: &mut Request, game: &mut Game) -> IronResult<Response> {
+    println!("{:?}", request);
     let data: WallRequest = parse_payload!(request);
     let a = (data.p1[0], data.p1[1]);
     let b = (data.p2[0], data.p2[1]);
-    let wall = Wall::from_tuples(a, b).unwrap();
-    take_turn!(game, data.name, data.key, game.add_wall(&wall))
+    let wall = Wall::from_tuples(a, b);
+    match wall {
+        Ok(w) => take_turn!(game, data.name, data.key, game.add_wall(&w)),
+        Err(e) => Ok(Response::with((status::BadRequest, &*e)))
+    }
 }
 
-fn wait_for_activity(_: &mut Request, lock: &Mutex<bool>, cvar: &Condvar)
-                  -> IronResult<Response>
-{
+fn wait_for_activity(request: &mut Request,
+                     lock: &Mutex<bool>,
+                     cvar: &Condvar)
+                     -> IronResult<Response> {
+    println!("{:?}", request);
     let taken = lock.lock().unwrap();
     let _ = cvar.wait(taken).unwrap();
     Ok(Response::with((status::Ok, "A turn was taken")))
 }
-
-/***********************************************************************
- * Server methods
- ***********************************************************************/
 
 pub fn listen(host: String, _game: Game) {
     let cond = Arc::new((Mutex::new(false), Condvar::new()));
@@ -250,7 +242,8 @@ pub fn listen(host: String, _game: Game) {
     register_get_route!(router, "/state", get_status, game);
     register_get_route!(router, "/ascii", get_ascii, game);
 
-    { // Special case to wait for next turn
+    {
+        // Special case to wait for next turn
         let cond_clone = cond.clone();
         router.get("/wait_for_activity", move |r: &mut Request| {
             let &(ref lock, ref cvar) = &*cond_clone;

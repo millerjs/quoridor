@@ -1,17 +1,14 @@
-/***********************************************************************
- * Quoridor game logic
- *
- * author: Joshua Miller
- * email: jshuasmiller@gmail.com
- *
- ***********************************************************************/
+//! Quoridor game logic
+//!
+//! author: Joshua Miller
+//! email: jsmiller@uchicago.edu
 
 use rustc_serialize::json::Json;
 use rustc_serialize::json::ToJson;
 use std::borrow::ToOwned;
 use std::collections::HashMap;
-use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::collections::BTreeMap;
 use std::cmp;
 
 const MAX_DIST: i32 = 100000;
@@ -19,12 +16,18 @@ pub const GAME_OVER: i32 = -2;
 pub const GAME_NOT_STARTED: i32 = -2;
 pub const N: i32 = 9;
 
-pub fn s(string: &str) -> String { string.to_owned() }
+/// Shortcut to convert str to String
+pub fn s(string: &str) -> String {
+    string.to_owned()
+}
 
+/// Shorter Point constructor
+pub fn _p(x: i32, y: i32) -> Point {
+    Point { x: x, y: y }
+}
 
-/***********************************************************************
- * Game Structs
- ***********************************************************************/
+macro_rules! p { ( $x:expr, $y:expr ) => { { Point{ x: $x, y: $y} } }; }
+
 
 #[derive(Debug)]
 pub struct Player {
@@ -45,22 +48,21 @@ pub enum Direction {
 
 #[derive(Hash,Debug,PartialOrd,Ord,PartialEq,Eq,Copy,Clone)]
 pub struct Point {
-    x: i32,
-    y: i32,
+    pub x: i32,
+    pub y: i32,
 }
 
+#[derive(Hash,Debug,PartialOrd,Ord,PartialEq,Eq)]
+pub struct Path {
+    pub nodes: Vec<Point>,
+}
 
 #[derive(Hash,Debug,PartialOrd,Ord,PartialEq,Eq,Copy,Clone)]
 pub struct Wall {
-    x: i32,
-    y: i32,
-    d: Direction,
+    pub x: i32,
+    pub y: i32,
+    pub d: Direction,
 }
-
-trait OnBoard {
-    fn inbounds(&self) -> bool;
-}
-
 
 #[derive(Debug)]
 pub struct Game {
@@ -75,58 +77,116 @@ pub enum Turn {
     Move(Point),
 }
 
-pub fn _p(x: i32, y: i32) -> Point { Point{x: x, y: y} }
+
+impl Path {
+    pub fn new() -> Path {
+        Path { nodes: vec![] }
+    }
+}
 
 
 impl Point {
-    fn inbounds(&self) -> bool {
+    /// Returns new point one space to the right
+    pub fn right(&self) -> Point {
+        Point {
+            x: self.x + 1,
+            y: self.y,
+        }
+    }
+
+    /// Returns new point one space to the right
+    pub fn left(&self) -> Point {
+        Point {
+            x: self.x - 1,
+            y: self.y,
+        }
+    }
+
+    /// Returns new point one space up
+    pub fn up(&self) -> Point {
+        Point {
+            x: self.x,
+            y: self.y - 1,
+        }
+    }
+
+    /// Returns new point one space down
+    pub fn down(&self) -> Point {
+        Point {
+            x: self.x,
+            y: self.y + 1,
+        }
+    }
+
+    /// Is the point on the board
+    pub fn inbounds(&self) -> bool {
         self.x >= 0 && self.x < N && self.y >= 0 && self.y < N
     }
 
-    fn neighbors(&self, other: Point) -> bool {
+    /// Is this point neighbors with the other
+    pub fn neighbors(&self, other: Point) -> bool {
         ((self.x - other.x).abs() == 0 && (self.y - other.y).abs() == 1) ||
-            ((self.y - other.y).abs() == 0 && (self.x - other.x).abs() == 1)
+        ((self.y - other.y).abs() == 0 && (self.x - other.x).abs() == 1)
     }
 }
 
 
 impl Wall {
-
-    fn horizontal(x: i32, y: i32) -> Wall {
-        Wall { d: Direction::Horizontal, x: x, y: y }
+    /// Creates new horizontal wall
+    pub fn horizontal(x: i32, y: i32) -> Wall {
+        Wall {
+            d: Direction::Horizontal,
+            x: x,
+            y: y,
+        }
     }
 
-    fn vertical(x: i32, y: i32) -> Wall {
-        Wall { d: Direction::Vertical, x: x, y: y }
+    /// Creates new vertical wall
+    pub fn vertical(x: i32, y: i32) -> Wall {
+        Wall {
+            d: Direction::Vertical,
+            x: x,
+            y: y,
+        }
     }
 
-    fn inbounds(&self) -> bool {
+    /// Is wall on the board
+    pub fn inbounds(&self) -> bool {
         self.x > 0 && self.x < N && self.y > 0 && self.y < N
     }
 
+    /// Returns a new wall shifted +x, +y
     pub fn shift(&self, x: i32, y: i32) -> Wall {
-        Wall { x: self.x + x, y: self.y + y, ..*self }
+        Wall {
+            x: self.x + x,
+            y: self.y + y,
+            ..*self
+        }
     }
 
+    /// Rotates wall around center point
     pub fn rotate(&self) -> Wall {
-        Wall { d: match self.d {
-            Direction::Vertical   => Direction::Horizontal,
-            Direction::Horizontal => Direction::Vertical,
-        }, ..*self}
+        Wall {
+            d: match self.d {
+                Direction::Vertical => Direction::Horizontal,
+                Direction::Horizontal => Direction::Vertical,
+            },
+            ..*self
+        }
     }
 
     pub fn to_tuples(&self) -> ((i32, i32), (i32, i32)) {
         match self.d {
-            Direction::Vertical   => {((self.x, self.y-1), (self.x, self.y+1))}
-            Direction::Horizontal => {((self.x-1, self.y), (self.x+1, self.y))}
+            Direction::Vertical => ((self.x, self.y - 1), (self.x, self.y + 1)),
+            Direction::Horizontal => ((self.x - 1, self.y), (self.x + 1, self.y)),
         }
     }
 
     pub fn from_tuples(a: (i32, i32), b: (i32, i32)) -> Result<Wall, String> {
         if a.1 == b.1 && (a.0 - b.0).abs() == 2 {
-            Ok(Wall::horizontal((a.0+b.0)/2, a.1))
+            Ok(Wall::horizontal((a.0 + b.0) / 2, a.1))
         } else if a.0 == b.0 && (a.1 - b.1).abs() == 2 {
-            Ok(Wall::vertical(a.0, (a.1+b.1)/2))
+            Ok(Wall::vertical(a.0, (a.1 + b.1) / 2))
         } else {
             Err(s("Wall points must distance 2 away"))
         }
@@ -135,19 +195,13 @@ impl Wall {
     pub fn from_points(a: Point, b: Point) -> Result<Wall, String> {
         Wall::from_tuples((a.x, a.y), (b.x, b.y))
     }
-
 }
 
-/***********************************************************************
- * Player implementations
- ***********************************************************************/
 
 impl Player {
     pub fn has_won(&self) -> bool {
-        return (self.id != 1 && self.p.y < 0)
-            || (self.id != 2 && self.p.x < 0)
-            || (self.id != 0 && self.p.y >= N)
-            || (self.id != 3 && self.p.y >= N)
+        return (self.id != 1 && self.p.y < 0) || (self.id != 2 && self.p.x < 0) ||
+               (self.id != 0 && self.p.y >= N) || (self.id != 3 && self.p.y >= N);
     }
 
     pub fn to_json(&self) -> Json {
@@ -160,85 +214,8 @@ impl Player {
     }
 }
 
-/***********************************************************************
- * Game implementations
- ***********************************************************************/
 
-#[allow(dead_code)]
 impl Game {
-
-    /// Creates a new game of size `size x size`
-    pub fn new() -> Game
-    {
-        Game {
-            players: HashMap::new(),
-            walls:  HashSet::new(),
-            turn: GAME_NOT_STARTED,
-        }
-    }
-
-    /// Starts the game, assigns wall chips, sets the turn
-    pub fn start_game(&mut self)
-    {
-        self.turn = 0;
-        assert!(self.players.len() == 4 || self.players.len() == 2);
-        if self.players.len() == 4 {
-            for (_, p) in self.players.iter_mut() { p.walls = 5 }
-        }
-        if self.players.len() == 2 {
-            for (_, p) in self.players.iter_mut() { p.walls = 10 }
-        }
-    }
-
-    /// Increment the turn counter
-    pub fn next_turn(&mut self)
-    {
-        // Check if someone won
-        for (_, p) in self.players.iter() {
-            if p.has_won() { self.turn == GAME_OVER; }
-        }
-
-        self.turn = (self.turn + 1) % (self.players.len() as i32)
-    }
-
-    /// Adds a player given a name, and a password `key`
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The name of the player.  Use this later when moving
-    ///            the player
-    /// * `key` - The password for the player.  Use this later when moving
-    ///           the player.   It is used to prevent unauthorized moves.
-    pub fn add_player(&mut self, name: String, key: String)
-                      -> Result<String, String>
-    {
-        if self.turn >= 0 {
-            return Err(s("Game already started"));
-        } else if self.players.contains_key(&name) {
-            return Err(format!("Player {} already registered.", name.clone()))
-        } else if self.players.len() >= 2 {
-            return Err(format!("Attempt to register 3rd player."))
-        }
-
-        // Create and add the player
-        let i = self.players.len();
-        let starting_positions = [
-            _p(N/2, 0), _p(N/2, N-1), _p(0, N/2), _p(N-1, N/2)];
-        self.players.insert(name.clone(), Player {
-            p: starting_positions[i],
-            p_last: None,
-            key: key,
-            id: i as u8,
-            walls: 0,
-            name: name.clone(),
-        });
-
-        // If we have enough players, start the game
-        if self.players.len() == 2 { self.start_game() }
-
-        return Ok(format!("Added player {}", name))
-    }
-
     pub fn do_turn(&mut self, name: String, turn: Turn) {
         let _ = match turn {
             Turn::PlaceWall(wall) => self.add_wall(&wall),
@@ -263,72 +240,214 @@ impl Game {
         };
     }
 
-    pub fn is_valid_move(&mut self, start: Point, end: Point) -> bool
-    {
-        // Boundary checks
-        if !end.inbounds() {
-            debug!("Attempted to move out of bounds");
-            return false
+    /// Check to see if all players have at least 1 possible path to
+    /// their endzone
+    pub fn check_win_condition(&self, name: String) -> bool {
+        let p = &self.players[&name];
+        let (d, _) = self.dijkstra(p.p);
+        match p.id {
+            0 => (0..N).fold(false, |v, i| v || d[&p!(i, N - 1)] < MAX_DIST),
+            1 => (0..N).fold(false, |v, i| v || d[&p!(i, 0)] < MAX_DIST),
+            _ => false,
         }
+    }
 
-        // Check empty
-        if self.get_player_at_position(end).is_ok() {
-            debug!("Position is not empty");
-            return false
+    pub fn dijkstra(&self, src: Point) -> (HashMap<Point, i32>, HashMap<Point, Point>) {
+        let n = (N * N) as usize;
+        let mut dist = HashMap::with_capacity(n);
+        let mut prev = HashMap::with_capacity(n);
+        let mut nodes: HashSet<Point> = HashSet::with_capacity(n);
+
+        for x in 0..N {
+            for y in 0..N {
+                dist.insert(p!(x, y), MAX_DIST);
+                nodes.insert(p!(x, y));
+            }
         }
+        dist.insert(src, 0);
 
-        // Check for jumps
-        if !self.adj(start, end) {
-            let (dx, dy) = (end.x - start.x, end.y - start.y);
+        while !nodes.is_empty() {
+            let mut u = *nodes.iter().next().unwrap();
+            let mut min = MAX_DIST;
 
-            if (dy.abs() == 2 && dx == 0) || (dy == 0 && dx.abs() == 2) {
-                // Linear jumps
-                let them_pos = _p(end.x-dx/2, end.y-dy/2);
-                if self.get_player_at_position(them_pos).is_err()
-                    || !self.adj(them_pos, _p(end.x, end.y))
-                    || !self.adj(them_pos, _p(end.x-dx, end.y-dy)) {
-                        debug!("Invalid linear jump {:?} to {:?}", start, end);
-                        return false
-                    }
-
-            } else if dx.abs() == 1 && dy.abs() == 1 {
-                // Corner Jumps
-                if !((! self.adj(_p(end.x, start.y), _p(end.x+dx, start.y))
-                      && self.adj(_p(start.x, start.y), _p(end.x, start.y))
-                      && self.adj(_p(end.x, end.y), _p(end.x, start.y)))
-                     || (! self.adj(_p(start.x, end.y), _p(start.x, end.y+dy))
-                         && self.adj(_p(start.x, start.y), _p(start.x, end.y))
-                         && self.adj(_p(end.x, end.y), _p(start.x, end.y)))){
-                    debug!("Invalid corner jump {:?} to {:?}", start, end);
-                    return false
+            for node in &nodes {
+                if dist[node] < min {
+                    min = dist[node];
+                    u = *node
                 }
+            }
 
-            } else {
-                debug!("Cannot move player from {:?} to {:?}", start, end);
-                return false
+            nodes.remove(&u);
+
+            let mut neighbors = Vec::with_capacity(9);
+            for dx in -2..3 {
+                for dy in -2..3 {
+                    neighbors.push(p!(u.x + dx, u.y + dy))
+                }
+            }
+
+            for v in &neighbors {
+                if dist.contains_key(v) && self.adj(u, *v).is_ok() {
+                    let alt = dist[&u] + 1;
+                    if alt < dist[v] {
+                        dist.insert(*v, alt);
+                        prev.insert(*v, u);
+                    }
+                }
             }
         }
 
-        // If we made it here, then the move is valid.
-        return true;
+        return (dist, prev);
     }
 
-    pub fn move_player_to(&mut self, name: String, pos: Point)
-                          -> Result<String, String>
-    {
+    pub fn reconstruct_path(&self, prev: &HashMap<Point, Point>, dst: Point) -> Path {
+        let mut path = Path::new();
+        let mut u = dst;
+        while prev.contains_key(&u) {
+            path.nodes.insert(0, u);
+            u = prev[&u];
+        }
+        return path;
+    }
+
+    pub fn warshall(&self) -> Vec<Vec<bool>> {
+        let m = N + 2;
+        let n = (m * m) as usize;
+        let mut w = vec![vec![false; n]; n];
+        for a in 0..n {
+            for b in 0..n {
+                w[a][b] = self.adj(p!(a as i32 % m - 1, (a as i32) / m - 1),
+                                   p!(b as i32 % m - 1, (b as i32) / m - 1))
+                              .is_ok()
+            }
+        }
+        for k in 0..n {
+            for b in 0..n {
+                for a in 0..n {
+                    w[a][b] = w[a][b] || (w[a][k] && w[k][b])
+                }
+            }
+        }
+        return w;
+    }
+
+    pub fn adj(&self, a: Point, b: Point) -> Result<(), String> {
+        if !a.inbounds() {
+            return Err(format!("Point {:?} is not in bounds", a));
+        }
+
+        if !b.inbounds() {
+            return Err(format!("Point {:?} is not in bounds", b));
+        }
+
+        if a == b {
+            return Err(format!("{:?} and {:?} are the same point", a, b));
+        }
+
+        if !a.neighbors(b) {
+            return self.is_valid_jump(a, b);
+        }
+
+        if self.get_player_at_position(b).is_ok() {
+            return Err(format!("Position {:?} is not empty.", b));
+        }
+
+        if self.has_wall_between(a, b) {
+            return Err(format!("There is a wall between {:?} and {:?}.", a, b));
+        }
+
+        return Ok(());
+    }
+
+    pub fn is_valid_jump(&self, a: Point, b: Point) -> Result<(), String> {
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let horizontal_jump = dy.abs() == 2 && dx == 0;
+        let vertical_jump = dy == 0 && dx.abs() == 2;
+        let linear_jump = horizontal_jump || vertical_jump;
+        let corner_jump = dx.abs() == 1 && dy.abs() == 1;
+
+        if linear_jump {
+            let them_pos = p!(b.x - dx / 2, b.y - dy / 2);
+            let occupied = self.get_player_at_position(them_pos).is_ok();
+            let step1 = !self.has_wall_between(a, them_pos);
+            let step2 = !self.has_wall_between(them_pos, b);
+
+            if step1 && occupied && step2 {
+                return Ok(());
+            } else {
+                return Err(format!("Invalid linear jump."));
+            }
+
+        } else if corner_jump {
+
+            let mut path1 = self.get_player_at_position(p!(b.x, a.y)).is_ok();
+            let back_wall = self.has_wall_between(p!(b.x, a.y), p!(b.x + dx, a.y));
+            let step1 = !self.has_wall_between(a, p!(a.x + dx, a.y));
+            let step2 = !self.has_wall_between(p!(a.x + dx, a.y), b);
+
+            if path1 && back_wall && step1 && step2 {
+                return Ok(());
+            }
+
+            let mut path2 = self.get_player_at_position(p!(a.x, b.y)).is_ok();
+            let back_wall = self.has_wall_between(p!(a.x, b.y), p!(a.x, b.y + dy));
+            let step1 = !self.has_wall_between(a, p!(a.x, a.y + dy));
+            let step2 = !self.has_wall_between(p!(a.x, a.y + dy), b);
+
+            if path2 && back_wall && step1 && step2 {
+                return Ok(());
+            } else {
+                return Err(format!("Invalid corner jump."));
+            }
+
+        }
+
+        return Err(format!("This doesn't even look like a jump."));
+    }
+
+    pub fn has_wall_between(&self, a: Point, b: Point) -> bool {
+        if !a.neighbors(b) {
+            return false;
+        }
+
+        if a.y == b.y {
+            // Look for vertical wall
+            let test_wall = Wall::vertical(cmp::max(a.x, b.x), a.y);
+            return self.walls.contains(&test_wall) || self.walls.contains(&test_wall.shift(0, 1));
+        } else if a.x == b.x {
+            // Look for horizontal wall
+            let test_wall = Wall::horizontal(a.x, cmp::max(a.y, b.y));
+            return self.walls.contains(&test_wall) || self.walls.contains(&test_wall.shift(1, 0));
+        } else {
+            return false;
+        }
+    }
+
+    /// Creates a new game of size `size x size`
+    pub fn new() -> Game {
+        Game {
+            players: HashMap::new(),
+            walls: HashSet::new(),
+            turn: GAME_NOT_STARTED,
+        }
+    }
+
+    pub fn move_player_to(&mut self, name: String, pos: Point) -> Result<String, String> {
         if !self.players.contains_key(&name) {
-            return Err(s("Player not found."))
+            return Err(s("Player not found."));
         }
 
         let start = self.players[&name].p;
-        if self.is_valid_move(start, pos) {
-            if let Some(p) = self.players.get_mut(&name) {
-                p.p_last = Some(p.p);
-                p.p = pos;
+        match self.adj(start, pos) {
+            Ok(_) => {
+                if let Some(p) = self.players.get_mut(&name) {
+                    p.p_last = Some(p.p);
+                    p.p = pos;
+                }
+                return Ok(format!("Moved player to {:?}", &self.players[&name].p));
             }
-            return Ok(format!("Moved player to {:?}", &self.players[&name].p));
+            Err(msg) => return Err(msg),
         }
-        return Err(s("Invalid move"))
     }
 
     /// Moves a player a direction (one of UP, DOWN, LEFT, RIGHT)
@@ -337,23 +456,20 @@ impl Game {
     ///
     /// * `name` - The name of the player.
     /// * `dir`  - A string specifying which direction to move
-    pub fn move_player(&mut self, name: String, dir: String)
-                       -> Result<String, String>
-    {
+    pub fn move_player(&mut self, name: String, dir: String) -> Result<String, String> {
         let p = self.players[&name].p;
-        self.move_player_to(name, match &*dir.to_uppercase() {
-            "UP"    => _p(p.x, p.y-1),
-            "DOWN"  => _p(p.x, p.y+1),
-            "LEFT"  => _p(p.x-1, p.y),
-            "RIGHT" => _p(p.x+1, p.y),
-            _ => return Err(s("Unknown direction"))
-        })
+        self.move_player_to(name,
+                            match &*dir.to_uppercase() {
+                                "UP" => p.up(),
+                                "DOWN" => p.down(),
+                                "LEFT" => p.left(),
+                                "RIGHT" => p.right(),
+                                _ => return Err(s("Unknown direction")),
+                            })
     }
 
     /// Check if there is a player at position (x, y)
-    pub fn get_player_at_position(&self, p: Point)
-                                  -> Result<String, String>
-    {
+    pub fn get_player_at_position(&self, p: Point) -> Result<String, String> {
         for (name, player) in self.players.iter() {
             if player.p == p {
                 return Ok(name.clone());
@@ -363,45 +479,42 @@ impl Game {
     }
 
     /// Print ASCII representation to stdout
-    pub fn print(&self)
-    {
+    pub fn print(&self) {
         println!("{}", self.to_string());
     }
 
-    pub fn is_valid_wall(&mut self, wall: &Wall) -> bool
-    {
+    pub fn is_valid_wall(&mut self, wall: &Wall) -> bool {
         if !wall.inbounds() {
             debug!("Out of bounds");
-            return false
+            return false;
         }
 
         if self.walls.contains(wall) {
             debug!("Wall exists");
-            return false
+            return false;
         }
 
         if wall.d == Direction::Vertical {
             // Check vertical collisions
-            if self.walls.contains(&wall.rotate())
-                || self.walls.contains(&wall.shift(0, -1))
-                || self.walls.contains(&wall.shift(0,  1)) {
-                    debug!("Vertical wall collision");
-                    return false
-                }
+            if self.walls.contains(&wall.rotate()) || self.walls.contains(&wall.shift(0, -1)) ||
+               self.walls.contains(&wall.shift(0, 1)) {
+                debug!("Vertical wall collision");
+                return false;
+            }
         } else {
             // Check horizontal collisions
-            if self.walls.contains(&wall.rotate())
-                || self.walls.contains(&wall.shift(-1, 0))
-                || self.walls.contains(&wall.shift( 1, 0)) {
-                    debug!("Horizontal wall collision");
-                    return false
-                }
+            if self.walls.contains(&wall.rotate()) || self.walls.contains(&wall.shift(-1, 0)) ||
+               self.walls.contains(&wall.shift(1, 0)) {
+                debug!("Horizontal wall collision");
+                return false;
+            }
         }
 
         // Check each player has a path
         self.walls.insert(*wall);
-        let win_conditions = self.players.keys().fold(
-            true, |v, i| v && self.check_win_condition(i.clone()));
+        let win_conditions = self.players
+                                 .keys()
+                                 .fold(true, |v, i| v && self.check_win_condition(i.clone()));
         self.walls.remove(wall);
 
         if !win_conditions {
@@ -415,169 +528,132 @@ impl Game {
 
 
     /// Place a wall from intersection a->b
-    ///
-    /// # Note: wall b->a will also be stored
-    pub fn add_wall(&mut self, wall: &Wall) -> Result<String, String>
-    {
+    pub fn add_wall(&mut self, wall: &Wall) -> Result<String, String> {
         match self.is_valid_wall(wall) {
-            true  => {self.walls.insert(*wall); Ok(s("Added wall."))},
-            false => Err(s("Invalid wall."))
+            true => {
+                self.walls.insert(*wall);
+                Ok(s("Added wall."))
+            }
+            false => Err(s("Invalid wall.")),
         }
     }
 
-    pub fn add_wall_tuples(&mut self, a: (i32, i32), b: (i32, i32))
-                           -> Result<String, String>
-    {
+    pub fn add_wall_tuples(&mut self, a: (i32, i32), b: (i32, i32)) -> Result<String, String> {
         match Wall::from_tuples(a, b) {
-            Ok(w)  => self.add_wall(&w),
-            Err(w) => Err(format!("Invalid wall {:?}", w))
+            Ok(w) => self.add_wall(&w),
+            Err(w) => Err(format!("Invalid wall {:?}", w)),
         }
     }
 
 
-    /// Check to see if all players have at least 1 possible path to
-    /// their endzone
-    pub fn check_win_condition(&self, name: String) -> bool
-    {
-        let p = &self.players[&name];
-        let d = self.dijkstra(p.p);
-        let m = N;
-        match p.id {
-            0 => (1..N).fold(
-                false, |v, i| v || (d[(i+1+(N+1)*m) as usize]) < MAX_DIST),
-            1 => (1..N).fold(
-                false, |v, i| v || (d[((i+1)*m) as usize]) < MAX_DIST),
-            2 => (1..N).fold(
-                false, |v, i| v || (d[(N+1+(i+1)*m) as usize]) < MAX_DIST),
-            3 => (1..N).fold(
-                false, |v, i| v || (d[((i+1)*m) as usize]) < MAX_DIST),
-            _ => false,
+    /// Starts the game, assigns wall chips, sets the turn
+    pub fn start_game(&mut self) {
+        self.turn = 0;
+        assert!(self.players.len() == 4 || self.players.len() == 2);
+        if self.players.len() == 4 {
+            for (_, p) in self.players.iter_mut() {
+                p.walls = 5
+            }
+        }
+        if self.players.len() == 2 {
+            for (_, p) in self.players.iter_mut() {
+                p.walls = 10
+            }
         }
     }
 
-    /// Calculate the length of the shorted path from given source point to
-    /// all other points points on the board. This is O(n^2).
-    pub fn dijkstra(&self, src: Point) -> Vec<i32>
-    {
-        let m = N + 2;
-        let n = (m*m) as usize;
-        let mut dist = vec![MAX_DIST; n];
-        let mut spt_set = vec![false; n];
-        dist[(src.x+1+m*(src.y+1)) as usize] = 0;
-        for _ in 0..n {
-            let mut min = MAX_DIST;
-            let mut u = 0;
-            for v in 0..n {
-                if !spt_set[v] && dist[v] < min {
-                    min =  dist[v];
-                    u = v;
-                }
-            }
-            spt_set[u] = true;
-            for v in 0..n {
-                let uu = _p(u as i32 % m, (u as i32) / m);
-                let vv = _p(v as i32 % m, (v as i32) / m);
-                let guv = match self.adj(uu, vv) { true => 1, false => 0 };
-                if !spt_set[v] && guv == 1 && dist[u] != MAX_DIST
-                    && dist[u] + guv < dist[v] {
-                        dist[v] = dist[u] + guv;
-                    }
+    /// Increment the turn counter
+    pub fn next_turn(&mut self) {
+        // Check if someone won
+        for (_, p) in self.players.iter() {
+            if p.has_won() {
+                self.turn == GAME_OVER;
             }
         }
-        dist
+
+        self.turn = (self.turn + 1) % (self.players.len() as i32)
     }
 
-    /// Calculate if traversal is possible to for all cominations of
-    /// points on the board. This is O(n^3).
-    pub fn warshall(&self) -> Vec<Vec<bool>>
-    {
-        let m = N + 2;
-        let n = (m*m) as usize;
-        let mut w = vec![vec![false; n]; n];
-        for a in 0..n {
-            for b in 0..n {
-                w[a][b] = self.adj(
-                    _p(a as i32 % m - 1, (a as i32) / m - 1),
-                    _p(b as i32 % m - 1, (b as i32) / m - 1))
-            }
-        }
-        for k in 0..n {
-            for b in 0..n {
-                for a in 0..n {
-                    w[a][b] = w[a][b] || (w[a][k] && w[k][b])
-                }
-            }
-        }
-        w
-    }
-
-    /// Test to see if points a and b are adjacent (you can move a
-    /// piece from a to b).
-    pub fn adj(&self, a: Point, b: Point) -> bool
-    {
-        if !a.inbounds() || !b.inbounds() {
-            return false
+    /// Adds a player given a name, and a password `key`
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name of the player.  Use this later when moving
+    ///            the player
+    /// * `key` - The password for the player.  Use this later when moving
+    ///           the player.   It is used to prevent unauthorized moves.
+    pub fn add_player(&mut self, name: String, key: String) -> Result<String, String> {
+        if self.turn >= 0 {
+            return Err(s("Game already started"));
+        } else if self.players.contains_key(&name) {
+            return Err(format!("Player {} already registered.", name.clone()));
+        } else if self.players.len() >= 2 {
+            return Err(format!("Attempt to register 3rd player."));
         }
 
-        if !a.neighbors(b) {
-            return false
+        // Create and add the player
+        let i = self.players.len();
+        let starting_positions = [p!(N / 2, 0), p!(N / 2, N - 1), p!(0, N / 2), p!(N - 1, N / 2)];
+
+        let player = Player {
+            p: starting_positions[i],
+            p_last: None,
+            key: key,
+            id: i as u8,
+            walls: 0,
+            name: name.clone(),
+        };
+
+        self.players.insert(name.clone(), player);
+
+        // If we have enough players, start the game
+        if self.players.len() == 2 {
+            self.start_game()
         }
 
-        // Look for vertical wall
-        if a.y == b.y {
-            let test_wall = Wall::vertical(cmp::max(a.x, b.x), a.y);
-            if self.walls.contains(&test_wall)
-                || self.walls.contains(&test_wall.shift(0, 1)) {
-                    return false
-            }
-        }
-
-        // Look for horizontal wall
-        if a.x == b.x {
-            let test_wall = Wall::horizontal(a.x, cmp::max(a.y, b.y));
-            if self.walls.contains(&test_wall)
-                || self.walls.contains(&test_wall.shift(1, 0)) {
-                    return false
-            }
-        }
-
-        return true;
+        return Ok(format!("Added player {}", name));
     }
 
     /// Construct ASCII representation
-    pub fn to_string(&self) -> String
-    {
+    pub fn to_string(&self) -> String {
         let mut board = "".to_string();
         let x = "+";
         board.push_str("  ");
-        for i in 0..N { board.push_str(&*format!("{:4}", i)) };
+        for i in 0..N {
+            board.push_str(&*format!("{:4}", i))
+        }
         board.push_str("\n");
 
         // Vertical iteration
-        for j in 0..N  {
+        for j in 0..N {
             board.push_str("   ");
-            for i in 0..N  {
-                if self.adj(_p(i, j), _p(i, j-1)){
-                    board.push_str(&*format!("{}   ", x)) }
-                else { board.push_str(&*format!("{} - ", x)) }
+            for i in 0..N {
+                if !self.has_wall_between(p!(i, j), p!(i, j - 1)) {
+                    board.push_str(&*format!("{}   ", x))
+                } else {
+                    board.push_str(&*format!("{} - ", x))
+                }
             }
             board.push_str(&*format!("+\n{:2} ", j));
 
             // Horizontal iteration
             for i in 0..N {
-                let n = match self.get_player_at_position(_p(i, j)) {
+                let n = match self.get_player_at_position(p!(i, j)) {
                     Ok(name) => format!("{}", self.players[&name].id),
-                    Err(_) => s(" ")
+                    Err(_) => s(" "),
                 };
-                if self.adj(_p(i, j), _p(i-1, j)){
-                    board.push_str(&*format!("  {} ", n)) }
-                else { board.push_str(&*format!("| {} ", n)) }
+                if !self.has_wall_between(p!(i, j), p!(i - 1, j)) {
+                    board.push_str(&*format!("  {} ", n))
+                } else {
+                    board.push_str(&*format!("| {} ", n))
+                }
             }
-
-            board.push_str("|\n");
+            board.push_str("\n");
         }
         board.push_str("   ");
-        for _ in 0..N { board.push_str("+ - ") }
+        for _ in 0..N {
+            board.push_str("+   ")
+        }
         board.push_str("+\n");
         board
     }
@@ -604,21 +680,24 @@ impl Game {
 
     /// Return game from JSON
     pub fn from_json(doc: String) -> Game {
+        debug!("game from string: {:?}", doc);
         let data = Json::from_str(&*doc).unwrap();
         let mut game = Game::new();
+        game.turn = data["turn"].as_u64().unwrap() as i32;
         for player in data["players"].as_array().unwrap() {
             println!("player: {:?}", player);
             let name = player["name"].as_string().unwrap().to_string();
-            game.players.insert(name.clone(), Player {
-                p: _p(player["position"][0].as_u64().unwrap() as i32,
+            let player = Player {
+                p: p!(player["position"][0].as_u64().unwrap() as i32,
                       player["position"][1].as_u64().unwrap() as i32),
                 id: player["id"].as_u64().unwrap() as u8,
                 p_last: None,
                 key: "".to_string(),
                 walls: player["walls"].as_u64().unwrap() as u8,
-                name: name,
-            });
+                name: name.clone(),
+            };
+            game.players.insert(name.clone(), player);
         }
-        return game
+        return game;
     }
 }
