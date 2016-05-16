@@ -1,7 +1,26 @@
+// Copyright (c) 2015-2016 Joshua S. Miller
+//
+// Permission is hereby granted, free of charge, to any person
+// obtaining a copy of this software and associated documentation
+// files (the "Software"), to deal in the Software without
+// restriction, including without limitation the rights to use, copy,
+// modify, merge, publish, distribute, sublicense, and/or sell copies
+// of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+// BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+// ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+// CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
 //! Quoridor game server
-//!
-//! author: Joshua Miller
-//! email: jsmiller@uchicago.edu
 
 use router::Router;
 use iron::status;
@@ -16,11 +35,9 @@ use iron::prelude::*;
 use mount::Mount;
 use staticfile::Static;
 use std::path::Path;
-use quoridor::Game;
-use quoridor::Wall;
-use quoridor::_p;
-use quoridor::GAME_OVER;
-use quoridor::GAME_NOT_STARTED;
+use board::{Wall, Point};
+use quoridor::{Game, GameState};
+
 
 #[derive(RustcDecodable, RustcEncodable, Debug)]
 struct PlayerRegistrationRequest {
@@ -84,8 +101,7 @@ macro_rules! register_get_route {
     ($router: expr, $route: expr, $handler: expr, $game: expr) => {
         {
             let temp = $game.clone();
-            $router.get($route, move |r: &mut Request|
-                        $handler(r, &mut temp.read().unwrap()));
+            $router.get($route, move |r: &mut Request| $handler(r, &mut temp.read().unwrap()));
 
         }
     };
@@ -116,7 +132,7 @@ macro_rules! try_call {
             match $call {
                 Ok(_) => Ok(Response::with(
                     (status::Ok, $game.to_json().to_string()))),
-                Err(e) => Ok(Response::with((status::BadRequest, e)))
+                Err(e) => Ok(Response::with((status::BadRequest, e.to_string())))
             }
         }
     };
@@ -129,7 +145,7 @@ macro_rules! take_turn {
             check_player!($game, $name, $key);
             let ret = try_call!($game, $call);
             if ret.as_ref().unwrap().status.unwrap() == status::Ok {
-                $game.next_turn();
+                let _ = $game.increment_turn();
             }
             ret
         }
@@ -147,17 +163,14 @@ macro_rules! check_player {
                 return Ok(Response::with(
                     (status::BadRequest, "Unauthorized move.")))
             }
-            if $game.turn == GAME_NOT_STARTED {
-                return Ok(Response::with(
-                    (status::BadRequest, "Waiting on other players.")))
-            }
-            if $game.turn == GAME_OVER {
-                return Ok(Response::with(
-                    (status::BadRequest, "The game is over!")))
-            }
-            if $game.players[&$name].id as i32 != $game.turn {
-                return Ok(Response::with(
-                    (status::BadRequest, "Not your turn.")))
+            match $game.state {
+                GameState::Setup => return Ok(Response::with((status::BadRequest, "Waiting on other players."))),
+                GameState::GameOver => return Ok(Response::with((status::BadRequest, "Not your turn."))),
+                GameState::Started(turn) => {
+                    if $game.players[&$name].id as u8 != turn {
+                        return Ok(Response::with((status::BadRequest, "The game is over!")))
+                    }
+                }
             }
         }
     };
@@ -193,7 +206,7 @@ fn move_player_to(request: &mut Request, game: &mut Game) -> IronResult<Response
     take_turn!(game,
                data.name,
                data.key,
-               game.move_player_to(data.name, _p(data.position[0], data.position[1])))
+               game.move_player_to(data.name, point!(data.position[0], data.position[1])))
 }
 
 fn move_player(request: &mut Request, game: &mut Game) -> IronResult<Response> {
@@ -213,7 +226,7 @@ fn place_wall(request: &mut Request, game: &mut Game) -> IronResult<Response> {
     let wall = Wall::from_tuples(a, b);
     match wall {
         Ok(w) => take_turn!(game, data.name, data.key, game.add_wall(&w)),
-        Err(e) => Ok(Response::with((status::BadRequest, &*e)))
+        Err(e) => Ok(Response::with((status::BadRequest, e.to_string())))
     }
 }
 
