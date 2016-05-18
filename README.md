@@ -118,7 +118,7 @@ curl localhost:9999/api/state
 curl -XPOST localhost:9999/api/move_player -d '{
      "name": "Player 1",
      "key": "abcd",
-     "direction": "down",
+     "direction": "SOUTH",
 }'
 ```
 
