@@ -165,10 +165,10 @@ macro_rules! check_player {
             }
             match $game.state {
                 GameState::Setup => return Ok(Response::with((status::BadRequest, "Waiting on other players."))),
-                GameState::GameOver => return Ok(Response::with((status::BadRequest, "Not your turn."))),
+                GameState::GameOver => return Ok(Response::with((status::BadRequest, "The game is over!"))),
                 GameState::Started(turn) => {
                     if $game.players[&$name].id as u8 != turn {
-                        return Ok(Response::with((status::BadRequest, "The game is over!")))
+                        return Ok(Response::with((status::BadRequest, "Not your turn.")))
                     }
                 }
             }
