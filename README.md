@@ -118,7 +118,7 @@ curl localhost:9999/api/state
 curl -XPOST localhost:9999/api/move_player -d '{
      "name": "Player 1",
      "key": "abcd",
-     "direction": "SOUTH",
+     "direction": "SOUTH"
 }'
 ```
 
@@ -130,7 +130,7 @@ Pro tip: This is how you perform jumps.
 curl -XPOST localhost:9999/api/move_player_to -d '{
      "name": "Player 2",
      "key": "efgh",
-     "position": [4, 7],
+     "position": [4, 7]
 }'
 ```
 
@@ -148,8 +148,8 @@ curl -XGET localhost:9999/api/wait_for_activity
 ```
 curl -XPOST localhost:9999/api/place_wall -d '{
      "name": "Player 1",
-    "key": "asgm",
-    "p1": [0, 0],
+    "key": "abcd",
+    "p1": [0, 4],
     "p2": [2, 4]
 }'
 ```
